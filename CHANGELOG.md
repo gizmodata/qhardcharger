@@ -2,6 +2,11 @@
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.7] - 2026-10-15
+
+### Changed
+- Require `adbc-driver-gizmosql` == 2.0.15 (bundled). v2.0.15 builds its Linux library for glibc 2.17 instead of 2.34, so the bundled driver loads on older Linux distributions (RHEL / Oracle Linux 7 and 8, Debian 10/11, Ubuntu 20.04). Built with Go 1.26.9.
+
 ## [0.5.6] - 2026-09-30
 
 ### Changed
