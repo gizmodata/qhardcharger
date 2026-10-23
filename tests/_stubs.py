@@ -3,9 +3,9 @@ the wrapper touches at import time, so tests can run on a host without
 QGIS / ADBC installed (CI lint job, basic dev box, etc.).
 
 Both unit and integration tests call ``install()`` before importing
-``qgizmosql.provider.gizmosql_wrapper``. Integration tests then *replace*
-the stubbed ``adbc_driver_gizmosql`` with the real package on sys.path,
-because they need to actually open a Flight SQL connection.
+``qhardcharger.provider.hardcharger_wrapper``. Integration tests then *replace*
+the stubbed ``adbc_driver_hardcharger`` with the real package on sys.path,
+because they need to actually open a Warp SQL connection.
 """
 
 from __future__ import annotations
@@ -58,8 +58,8 @@ def install() -> None:
         sys.modules.setdefault("qgis", qgis)
         sys.modules["qgis.core"] = qgis_core
 
-    if "qgizmosql.toolbelt.log_handler" not in sys.modules:
-        log_handler_mod = types.ModuleType("qgizmosql.toolbelt.log_handler")
+    if "qhardcharger.toolbelt.log_handler" not in sys.modules:
+        log_handler_mod = types.ModuleType("qhardcharger.toolbelt.log_handler")
 
         class _PlgLogger:
             @staticmethod
@@ -67,16 +67,22 @@ def install() -> None:
                 pass
 
         log_handler_mod.PlgLogger = _PlgLogger
-        sys.modules["qgizmosql.toolbelt.log_handler"] = log_handler_mod
+        sys.modules["qhardcharger.toolbelt.log_handler"] = log_handler_mod
 
-    # adbc_driver_gizmosql may or may not be on sys.path. Stub only when
-    # the real one is absent so integration tests pick up the real driver.
-    if "adbc_driver_gizmosql" not in sys.modules:
+    if "pyarrow" not in sys.modules:
         try:
-            import adbc_driver_gizmosql  # noqa: F401
+            import pyarrow
         except ImportError:
-            adbc_pkg = types.ModuleType("adbc_driver_gizmosql")
-            adbc_dbapi = types.ModuleType("adbc_driver_gizmosql.dbapi")
+            sys.modules["pyarrow"] = types.ModuleType("pyarrow")
+
+    # adbc_driver_hardcharger may or may not be on sys.path. Stub only when
+    # the real one is absent so integration tests pick up the real driver.
+    if "adbc_driver_hardcharger" not in sys.modules:
+        try:
+            import adbc_driver_hardcharger  # noqa: F401
+        except ImportError:
+            adbc_pkg = types.ModuleType("adbc_driver_hardcharger")
+            adbc_dbapi = types.ModuleType("adbc_driver_hardcharger.dbapi")
             adbc_dbapi.connect = lambda *a, **kw: None
             adbc_pkg.dbapi = adbc_dbapi
 
@@ -85,5 +91,5 @@ def install() -> None:
                     value = "adbc.flight.sql.client_option.with_max_msg_size"
 
             adbc_pkg.DatabaseOptions = _DatabaseOptions
-            sys.modules["adbc_driver_gizmosql"] = adbc_pkg
-            sys.modules["adbc_driver_gizmosql.dbapi"] = adbc_dbapi
+            sys.modules["adbc_driver_hardcharger"] = adbc_pkg
+            sys.modules["adbc_driver_hardcharger.dbapi"] = adbc_dbapi

@@ -1,55 +1,27 @@
-# Contributing Guidelines
+# Contributing to qhardcharger
 
-First off, thanks for considering to contribute to this project!
-
-These are mostly guidelines, not rules. Use your best judgment, and feel free to propose changes to this document in a pull request.
-
-## Git hooks
-
-We use git hooks through [pre-commit](https://pre-commit.com/) to enforce and automatically check some "rules". Please install them (`pre-commit install`) before to push any commit.
-
-See the relevant configuration file: `.pre-commit-config.yaml`.
-
-## Code Style
-
-Make sure your code *roughly* follows [PEP-8](https://www.python.org/dev/peps/pep-0008/) and keeps things consistent with the rest of the code:
-
-- docstrings: [sphinx-style](https://sphinx-rtd-tutorial.readthedocs.io/en/latest/docstrings.html#the-sphinx-docstring-format) is used to write technical documentation.
-- formatting: [black](https://black.readthedocs.io/) is used to automatically format the code without debate.
-- sorted imports: [isort](https://pycqa.github.io/isort/) is used to sort imports
-- static analisis: [flake8](https://flake8.pycqa.org/en/latest/) is used to catch some dizziness and keep the source code healthy.
-
-## Tests
-
-Two layers, both runnable from the repo root:
-
-### Unit tests — pure Python, no Docker
+Use Python 3.11 or later, QGIS 4 and imports from `qgis.PyQt` with fully scoped Qt 6 enums. Preserve the inherited GPL-2.0-or-later copyright notices.
 
 ```bash
+python3.12 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements/testing.txt flake8==7.4.1 bandit==1.9.4
 python -m unittest discover -s tests/unit -v
-```
-
-These stub out PyQGIS and the native ADBC driver (see `tests/_stubs.py`),
-so they run anywhere with Python 3.12+ and finish in well under a second.
-
-### Integration tests — live GizmoSQL container
-
-```bash
-pip install pytest adbc-driver-gizmosql adbc-driver-flightsql docker
 python -m pytest tests/integration -v -m integration
+flake8 qhardcharger
+bandit -r qhardcharger --severity-level medium --exclude qhardcharger/embedded_external_libs
 ```
 
-The session-scoped fixture in `tests/integration/conftest.py` does one of:
+The integration fixture starts a local Hardcharger server with a temporary self-signed TLS certificate. In an environment with QGIS 4 and runtime dependencies, also run `python3 tests/qgis/verify_provider.py`; this exercises the actual provider and dialog, not QGIS stubs. The `qgis4` CI job uses the official QGIS checker container and runs the same test.
 
-1. **Reuse**: if something is already listening on `localhost:41337` (or
-   `$GIZMOSQL_TEST_PORT`), use it.
-2. **Spin up**: otherwise, launch a `gizmodata/gizmosql:latest` container
-   on host port `41337` (Flight SQL) and `41338` (health) — non-default
-   so it can coexist with a regular GizmoSQL the developer is running on
-   the standard `31337`.
-3. **CI sidecar**: in GitHub Actions, the workflow's `services:` block
-   provisions the container and the fixture is a no-op (controlled by
-   `GIZMOSQL_TEST_HOST`).
+`python scripts/package_plugin.py` builds the slim `dist/qhardcharger.zip`, including the license and excluding native dependencies, caches and macOS resource forks. To build an offline Python 3.12 ZIP, install the pinned runtime dependencies into `qhardcharger/embedded_external_libs/`, then run `python scripts/package_plugin.py --offline <platform>`. Never commit native dependencies.
 
-The integration job is wired into `.github/workflows/ci.yml` and gates
-`package` / `release` along with lint and unit tests.
+## Release
+
+1. Update `qhardcharger/metadata.txt` version and changelog; keep `experimental=False` and the QGIS 4 version range.
+2. Add the matching version section to `CHANGELOG.md`.
+3. Push to main, then wait for every CI job to pass.
+4. Tag `vX.Y.Z` matching metadata and push the tag. CI builds slim and platform-specific Python 3.12 offline ZIPs and creates the GitHub Release.
+5. The publish job uploads the slim ZIP using the repository's `QGIS_PLUGIN_TOKEN` secret, scoped to the `qhardcharger` package. Create the empty package on plugins.qgis.org first. A successful API upload does not guarantee approval; inspect the plugin's review status.
+
+No plugin token belongs in source, logs or release assets. A plugin repository failure leaves the independently installable GitHub Release available; retry only the failed publication job after fixing the problem.

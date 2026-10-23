@@ -1,3 +1,13 @@
-qgizmosql/embedded_external_libs/
+qhardcharger/embedded_external_libs/
 __pycache__/
 *.pyc
+.venv*/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+junit/
+dist/
+*.zip
+dev_flake8_report.txt
+qhardcharger/LICENSE

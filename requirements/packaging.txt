@@ -1,4 +1,2 @@
-# Packaging
-# ---------
-
-qgis-plugin-ci>=2.10,<3
+# The stdlib packager is scripts/package_plugin.py; optional QGIS publishing CLI:
+qgis-plugin-ci==2.10.0

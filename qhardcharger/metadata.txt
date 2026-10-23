@@ -1,0 +1,23 @@
+[general]
+name=Hardcharger
+about=Browse spatial tables and custom SQL from a Hardcharger server directly in QGIS 4.<br/>
+    Streams Arrow record batches over Warp SQL HTTP(S), with password or browser OAuth/SSO sign-in.
+    Credentials are stored encrypted by QGIS Auth Manager. Restart QGIS after upgrading.
+category=Database
+description=Connect QGIS 4 to Hardcharger and visualize remote spatial data over Warp SQL HTTP(S).
+hasProcessingProvider=False
+icon=resources/images/logo_hardcharger.webp
+server=True
+tags=hardcharger,database,spatial,sql,arrow,warp,duckdb,adbc
+author=GizmoData (Philip Moore). Based on qgizmosql and QDuckDB by Oslandia (Florent Fougeres, Jean Felder, Julien Moura).
+email=philip@gizmodata.com
+homepage=https://github.com/gizmodata/qhardcharger
+repository=https://github.com/gizmodata/qhardcharger
+tracker=https://github.com/gizmodata/qhardcharger/issues
+deprecated=False
+experimental=False
+qgisMinimumVersion=4.0
+qgisMaximumVersion=4.99
+version=1.0.0
+changelog=
+    1.0.0 - Stable Hardcharger plugin for QGIS 4 / Qt 6. Native Warp SQL HTTP(S), ADBC 2.0.2, PyArrow 26, spatial tables, custom SQL, encrypted credentials, and Arrow streaming.

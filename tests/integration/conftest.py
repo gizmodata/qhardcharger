@@ -1,9 +1,9 @@
-"""Shared fixtures for qgizmosql integration tests.
+"""Shared fixtures for qhardcharger integration tests.
 
-The GizmoSQL server is started as a managed subprocess via the
-[`gizmosql`](https://pypi.org/project/gizmosql/) PyPI package — no
-Docker required. ``gizmosql.Server(...)`` auto-picks a free port so
-the test server can coexist with a developer's local GizmoSQL on the
+The Hardcharger server is started as a managed subprocess via the
+[`hardcharger`](https://pypi.org/project/hardcharger/) PyPI package — no
+Docker required. ``hardcharger.Server(...)`` auto-picks a free port so
+the test server can coexist with a developer's local Hardcharger on the
 default 31337/31338 without any port juggling.
 
 Pure-Python tests (no QGIS, no native deps) live in ``tests/unit``;
@@ -21,13 +21,13 @@ from typing import Iterator
 import pytest
 
 
-GIZMOSQL_USERNAME = "gizmosql_user"
-GIZMOSQL_PASSWORD = "gizmosql_password"
+HARDCHARGER_USERNAME = "hardcharger_user"
+HARDCHARGER_PASSWORD = "hardcharger_password"
 
 
 def _generate_self_signed_tls_cert(out_dir: Path) -> tuple[Path, Path]:
     """Mint a self-signed RSA cert + key for ``localhost`` so the
-    GizmoSQL test server's Flight SQL endpoint is reachable over
+    Hardcharger test server's Warp SQL endpoint is reachable over
     ``grpc+tls://``."""
     from cryptography import x509  # noqa: PLC0415
     from cryptography.hazmat.primitives import hashes, serialization  # noqa: PLC0415
@@ -65,53 +65,53 @@ def _generate_self_signed_tls_cert(out_dir: Path) -> tuple[Path, Path]:
 
 
 @pytest.fixture(scope="session")
-def gizmosql_server(tmp_path_factory) -> Iterator:
-    """Start a GizmoSQL server as a managed subprocess for the session."""
-    gizmosql = pytest.importorskip(
-        "gizmosql",
-        reason="install `pip install gizmosql` to run integration tests",
+def hardcharger_server(tmp_path_factory) -> Iterator:
+    """Start a Hardcharger server as a managed subprocess for the session."""
+    hardcharger = pytest.importorskip(
+        "hardcharger",
+        reason="install `pip install hardcharger` to run integration tests",
     )
 
     tls_dir = tmp_path_factory.mktemp("tls")
     tls_dir.chmod(0o700)
     tls_cert, tls_key = _generate_self_signed_tls_cert(tls_dir)
 
-    with gizmosql.Server(
-        username=GIZMOSQL_USERNAME,
-        password=GIZMOSQL_PASSWORD,
-        extra_args=["--tls", str(tls_cert), str(tls_key)],
-        extra_env={"PRINT_QUERIES": "0"},
+    with hardcharger.Server(
+        username=HARDCHARGER_USERNAME,
+        password=HARDCHARGER_PASSWORD,
+        tls_cert=tls_cert,
+        tls_key=tls_key,
     ) as srv:
         yield srv
 
 
 @pytest.fixture(scope="session")
-def gizmosql_host(gizmosql_server) -> str:
-    return gizmosql_server.host
+def hardcharger_host(hardcharger_server) -> str:
+    return hardcharger_server.host
 
 
 @pytest.fixture(scope="session")
-def gizmosql_port(gizmosql_server) -> int:
-    return gizmosql_server.port
+def hardcharger_port(hardcharger_server) -> int:
+    return hardcharger_server.port
 
 
 @pytest.fixture(scope="session")
-def gizmosql_credentials() -> dict:
+def hardcharger_credentials() -> dict:
     """Username / password / TLS skip flag the test server is configured with."""
     return {
-        "username": GIZMOSQL_USERNAME,
-        "password": GIZMOSQL_PASSWORD,
+        "username": HARDCHARGER_USERNAME,
+        "password": HARDCHARGER_PASSWORD,
         "tls_skip_verify": True,
     }
 
 
 @pytest.fixture(scope="session")
-def gizmosql_conn_config(
-    gizmosql_host: str,
-    gizmosql_port: int,
-    gizmosql_credentials: dict,
+def hardcharger_conn_config(
+    hardcharger_host: str,
+    hardcharger_port: int,
+    hardcharger_credentials: dict,
 ):
-    """A ready-to-use ``GizmoSqlConnConfig`` against the test server."""
+    """A ready-to-use ``HardchargerConnConfig`` against the test server."""
     # Install qgis stubs before importing the wrapper (it pulls in qgis.core
     # at module top level, which won't exist on a CI box without QGIS).
     _tests_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -121,14 +121,14 @@ def gizmosql_conn_config(
 
     _install_stubs()
 
-    from qgizmosql.provider.gizmosql_wrapper import GizmoSqlConnConfig
+    from qhardcharger.provider.hardcharger_wrapper import HardchargerConnConfig
 
-    return GizmoSqlConnConfig(
-        host=gizmosql_host,
-        port=gizmosql_port,
+    return HardchargerConnConfig(
+        host=hardcharger_host,
+        port=hardcharger_port,
         use_tls=True,
-        tls_skip_verify=gizmosql_credentials["tls_skip_verify"],
-        username=gizmosql_credentials["username"],
-        password=gizmosql_credentials["password"],
+        tls_skip_verify=hardcharger_credentials["tls_skip_verify"],
+        username=hardcharger_credentials["username"],
+        password=hardcharger_credentials["password"],
         auth_type="password",
     )

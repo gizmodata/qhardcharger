@@ -1,0 +1,505 @@
+"""Hardcharger client wrapper. Holds every logic related to talking to a Hardcharger
+(Warp SQL) server via the ADBC driver.
+
+References:
+
+- https://pypi.org/project/adbc-driver-hardcharger/
+- https://github.com/gizmodata/hardcharger-adbc
+- https://github.com/gizmodata/hardcharger
+"""
+
+# standard
+from typing import Any, Optional, Union
+from urllib.parse import parse_qsl, urlencode, urlparse
+
+# PyQGIS
+from qgis.core import Qgis, QgsApplication, QgsAuthMethodConfig
+
+# plugin
+from qhardcharger.toolbelt.log_handler import PlgLogger
+
+# Always make the plugin's embedded_external_libs/ directory the FIRST entry
+# on sys.path before importing adbc_driver_hardcharger / pyarrow. This way, any
+# transitive deps the plugin's installer downloaded (e.g. importlib_resources)
+# are found alongside their parent package, instead of falling back to a
+# partial install elsewhere on the system that's missing them.
+import sys
+
+from qhardcharger.__about__ import DIR_PLUGIN_ROOT
+
+_embedded = str(DIR_PLUGIN_ROOT / "embedded_external_libs")
+if _embedded in sys.path:
+    sys.path.remove(_embedded)
+sys.path.insert(0, _embedded)
+
+import pyarrow  # noqa: F401, E402
+from adbc_driver_hardcharger import dbapi as hardcharger_dbapi  # type: ignore  # noqa: E402
+
+PlgLogger.log(message="adbc-driver-hardcharger loaded.")
+
+# Default Warp SQL port used by Hardcharger.
+DEFAULT_HARDCHARGER_PORT: int = 31337
+
+
+# -- CONNECTION CONFIG ---------------------------------------------------------
+
+
+class HardchargerConnConfig:
+    """Immutable-ish bundle of connection parameters for a Hardcharger server.
+
+    Mirrors the kwargs accepted by :func:`adbc_driver_hardcharger.dbapi.connect`.
+    Constructed from a parsed QGIS URI (see :meth:`HardchargerTools.parse_uri`) or
+    directly by the connection dialog.
+    """
+
+    def __init__(
+        self,
+        host: str,
+        port: int = DEFAULT_HARDCHARGER_PORT,
+        use_tls: bool = True,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        auth_type: str = "password",
+        tls_skip_verify: bool = False,
+        authcfg: Optional[str] = None,
+    ):
+        self.host = host
+        self.port = int(port)
+        self.use_tls = bool(use_tls)
+        self.username = username
+        self.password = password
+        self.auth_type = auth_type  # "password" | "external" (OAuth/SSO)
+        self.tls_skip_verify = bool(tls_skip_verify)
+        # QGIS Auth Manager config ID — if set, username/password are looked up
+        # from the encrypted credential store at connect time, and the in-memory
+        # copies on this object are ignored.
+        self.authcfg = authcfg or None
+
+    def _resolve_from_auth_manager(self) -> tuple[Optional[str], Optional[str]]:
+        """Fetch username/password from the QGIS Auth Manager if authcfg is set.
+
+        Returns (None, None) if no authcfg, or on lookup failure.
+        """
+        if not self.authcfg:
+            return (None, None)
+        mgr = QgsApplication.authManager()
+        cfg = QgsAuthMethodConfig()
+        ok, cfg = mgr.loadAuthenticationConfig(self.authcfg, cfg, True)
+        if not ok:
+            PlgLogger.log(
+                message=(
+                    f"Could not load QGIS auth config {self.authcfg!r}."
+                ),
+                log_level=Qgis.MessageLevel.Warning,
+                push=True,
+            )
+            raise ValueError("Unable to load the selected QGIS authentication config")
+        return (cfg.config("username") or None, cfg.config("password") or None)
+
+    @property
+    def server_uri(self) -> str:
+        """Driver URI. TLS is on unless explicitly disabled for development."""
+        host = f"[{self.host}]" if ":" in self.host else self.host
+        uri = f"hardcharger://{host}:{self.port}"
+        return uri if self.use_tls else f"{uri}?tls=false"
+
+    def connect_kwargs(self) -> dict:
+        """Build the kwargs dict for hardcharger_dbapi.connect()."""
+        kwargs: dict = {
+            "tls_skip_verify": self.tls_skip_verify,
+        }
+        if self.auth_type == "external":
+            kwargs["auth_type"] = "external"
+            return kwargs
+
+        # Password mode — prefer QGIS Auth Manager if authcfg is set.
+        username: Optional[str] = self.username
+        password: Optional[str] = self.password
+        if self.authcfg:
+            username, password = self._resolve_from_auth_manager()
+
+        if username is not None:
+            kwargs["username"] = username
+        if password is not None:
+            kwargs["password"] = password
+        return kwargs
+
+    def display_name(self) -> str:
+        """Short human-readable identifier — used in log messages."""
+        return f"{self.host}:{self.port}"
+
+    def __repr__(self) -> str:
+        return (
+            f"HardchargerConnConfig(host={self.host!r}, port={self.port}, "
+            f"use_tls={self.use_tls}, auth_type={self.auth_type!r}, "
+            f"authcfg={self.authcfg!r}, username={self.username!r}, "
+            f"password={'***' if self.password else None})"
+        )
+
+
+# -- CONNECTION ADAPTER --------------------------------------------------------
+
+
+class _ConnectionAdapter:
+    """Thin wrapper around an ADBC dbapi Connection that exposes a DuckDB-like
+    ``.sql(query)`` interface returning an object with ``fetchone()``,
+    ``fetchall()``, and ``description``.
+
+    Purpose: lets the rest of the plugin code (provider, feature iterator) keep
+    the call shape it had under DuckDB without a mass rewrite. Prefer going
+    through this adapter over the raw ADBC connection for QGIS-side code.
+    """
+
+    def __init__(self, adbc_conn: Any):
+        self._conn = adbc_conn
+
+    def sql(self, query: str) -> "_QueryResult":
+        return _QueryResult(self._conn, query)
+
+    def execute(self, query: str) -> "_QueryResult":
+        # DuckDB's ``execute`` returns a result with ``fetchone``; we return
+        # the same shape.
+        return _QueryResult(self._conn, query)
+
+    def cursor(self):
+        return self._conn.cursor()
+
+    def close(self) -> None:
+        try:
+            self._conn.close()
+        except Exception as exc:  # noqa: BLE001
+            PlgLogger.log(
+                message=f"Ignored error closing ADBC connection: {exc!r}",
+                log_level=Qgis.MessageLevel.Warning,
+                push=False,
+            )
+
+    def __getattr__(self, item):
+        # Fall through to the underlying ADBC connection for anything else.
+        return getattr(self._conn, item)
+
+
+class _QueryResult:
+    """Lazy ADBC cursor wrapper mimicking DuckDB's query-result shape.
+
+    The cursor is created and the query executed on first call to
+    ``fetchone``, ``fetchall``, or ``description`` — this matches DuckDB's
+    lazy ``con.sql()`` behaviour.
+    """
+
+    def __init__(self, adbc_conn: Any, sql: str):
+        self._conn = adbc_conn
+        self._sql = sql
+        self._cur = None
+        self._executed = False
+
+    def _ensure(self) -> None:
+        if self._executed:
+            return
+        self._cur = self._conn.cursor()
+        self._cur.execute(self._sql)
+        self._executed = True
+
+    def fetchone(self):
+        self._ensure()
+        return self._cur.fetchone()
+
+    def fetchall(self):
+        self._ensure()
+        return self._cur.fetchall()
+
+    def fetch_arrow_table(self):
+        self._ensure()
+        return self._cur.fetch_arrow_table()
+
+    @property
+    def description(self):
+        self._ensure()
+        return self._cur.description
+
+
+# -- MAIN WRAPPER --------------------------------------------------------------
+
+
+class HardchargerTools:
+    """High-level operations against a Hardcharger server."""
+
+    SQL_QUERIES: dict = {
+        "connection_alive": "SELECT 1;",
+        "list_tables": (
+            # Three-part name (catalog.schema.table) so the dialog can show
+            # which catalog each table lives in. Hide Hardcharger's internal
+            # _hardcharger_system catalog and the standard SQL system schemas.
+            "SELECT concat(table_catalog, '.', table_schema, '.', table_name) "
+            "       AS table_name "
+            "FROM information_schema.tables "
+            "WHERE table_catalog NOT IN ('_hardcharger_system', '__ducklake_metadata_lakehouse') "
+            "  AND table_schema  NOT IN ('information_schema', 'pg_catalog') "
+            "ORDER BY 1"
+        ),
+        "list_schemas": (
+            "SELECT schema_name FROM information_schema.schemata "
+            "WHERE schema_name NOT IN ('information_schema', 'pg_catalog')"
+        ),
+    }
+
+    def __init__(self, conn_config: Optional[HardchargerConnConfig] = None):
+        self.conn_config: Optional[HardchargerConnConfig] = conn_config
+        self.conn: Any = None  # adbc_driver_hardcharger.dbapi.Connection
+
+        # Parsed URI attributes (set by parse_uri)
+        self._table_name: Optional[str] = None
+        self._epsg_code: Optional[str] = None
+        self._sql: Optional[str] = None
+        self._schema: Optional[str] = None
+        self._catalog: Optional[str] = None
+
+    # -- CONNECT / CLOSE / ALIVE -----------------------------------------------
+
+    def connect(self) -> Any:
+        """Open a connection to the Hardcharger server (or return the existing one).
+
+        :return: adbc_driver_hardcharger.dbapi.Connection
+        """
+        if self.conn_config is None:
+            raise ValueError(
+                "No connection config set on the wrapper. Call parse_uri() first "
+                "or pass conn_config to the constructor."
+            )
+
+        if self.is_connection_alive():
+            PlgLogger.log(
+                message=f"Connection to {self.conn_config.display_name()} already open.",
+                log_level=Qgis.MessageLevel.Info,
+                push=False,
+            )
+            return self.conn
+
+        try:
+            raw_conn = hardcharger_dbapi.connect(
+                uri=self.conn_config.server_uri,
+                **self.conn_config.connect_kwargs(),
+            )
+            self.conn = _ConnectionAdapter(raw_conn)
+            PlgLogger.log(
+                message=f"Connected to Hardcharger at {self.conn_config.display_name()}.",
+                log_level=Qgis.MessageLevel.Info,
+                push=False,
+            )
+            return self.conn
+        except Exception as exc:
+            PlgLogger.log(
+                message=(
+                    f"Connection to {self.conn_config.display_name()} failed. "
+                    f"Trace: {exc}"
+                ),
+                log_level=Qgis.MessageLevel.Critical,
+                push=True,
+            )
+            raise
+
+    def close(self) -> None:
+        """Close the connection held at wrapper level, if any."""
+        if self.conn is not None:
+            try:
+                self.conn.close()
+            except Exception as exc:
+                PlgLogger.log(
+                    message=f"Error while closing connection. Trace: {exc}",
+                    log_level=Qgis.MessageLevel.Warning,
+                    push=False,
+                )
+            finally:
+                self.conn = None
+
+    def is_connection_alive(self) -> bool:
+        """Return True if self.conn is a live, responsive connection."""
+        if self.conn is None:
+            return False
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(self.SQL_QUERIES["connection_alive"])
+                cur.fetchone()
+            return True
+        except Exception:
+            return False
+
+    # -- QUERY -----------------------------------------------------------------
+
+    def run_sql(
+        self,
+        query_sql: str,
+        results_fetcher: str = "fetchall",
+    ) -> Union[list, tuple, Any, None]:
+        """Execute SQL against the Hardcharger server and return results.
+
+        :param query_sql: SQL string, or a key from :attr:`SQL_QUERIES`.
+        :param results_fetcher: one of ``"fetchall"``, ``"fetchone"``,
+            ``"fetch_arrow"`` (returns a pyarrow.Table), or ``"no_output"``.
+        """
+        if query_sql in self.SQL_QUERIES:
+            query_sql = self.SQL_QUERIES[query_sql]
+
+        if not self.is_connection_alive():
+            self.connect()
+
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(query_sql)
+                if results_fetcher == "fetchall":
+                    result = cur.fetchall()
+                elif results_fetcher == "fetchone":
+                    result = cur.fetchone()
+                elif results_fetcher == "fetch_arrow":
+                    result = cur.fetch_arrow_table()
+                elif results_fetcher == "no_output":
+                    result = None
+                else:
+                    raise ValueError(
+                        f"Unknown results_fetcher: {results_fetcher!r}"
+                    )
+            PlgLogger.log(
+                message=(
+                    f"Query succeeded on {self.conn_config.display_name()}: "
+                    f"{query_sql[:120]}"
+                ),
+                log_level=Qgis.MessageLevel.NoLevel,
+                push=False,
+            )
+            return result
+        except Exception as exc:
+            PlgLogger.log(
+                message=(
+                    f"Query failed on {self.conn_config.display_name()}. "
+                    f"SQL: {query_sql!r}. Trace: {exc}"
+                ),
+                log_level=Qgis.MessageLevel.Critical,
+                push=True,
+            )
+            raise
+
+    # -- URI ENCODING / DECODING -----------------------------------------------
+
+    # QGIS passes the plugin a single URI string to identify a layer. We use a
+    # query-string format because QGIS's providerMetadata.encodeUri/decodeUri
+    # expects a dict of str — the old DuckDB plugin leaned on that; we roll our
+    # own parsing here so the wrapper works outside of the provider registry too.
+    #
+    # Example URI:
+    #   hardcharger://host:31337?use_tls=1&tls_skip_verify=1&auth_type=password
+    #       &username=hardcharger_user&password=hardcharger_password
+    #       &catalog=memory&schema=main&table=my_spatial_table&epsg=4326
+
+    URI_SCHEME = "hardcharger"
+
+    def parse_uri(self, uri: str) -> tuple[
+        HardchargerConnConfig,
+        Optional[str],
+        Optional[str],
+        Optional[str],
+        Optional[str],
+        Optional[str],
+    ]:
+        """Parse a qhardcharger layer URI.
+
+        :return: (conn_config, table, epsg, sql, schema, catalog)
+        """
+        parsed = urlparse(uri)
+        if parsed.scheme and parsed.scheme != self.URI_SCHEME:
+            raise ValueError(
+                f"Invalid URI scheme: expected {self.URI_SCHEME!r}, got "
+                f"{parsed.scheme!r} in {uri!r}"
+            )
+
+        if not parsed.hostname:
+            raise ValueError(f"URI missing host: {uri!r}")
+
+        q = dict(parse_qsl(parsed.query, keep_blank_values=True))
+
+        def _bool(v: Optional[str], default: bool) -> bool:
+            if v is None:
+                return default
+            return v.strip().lower() in ("1", "true", "yes", "on")
+
+        conn_config = HardchargerConnConfig(
+            host=parsed.hostname,
+            port=parsed.port or DEFAULT_HARDCHARGER_PORT,
+            use_tls=_bool(q.get("use_tls", q.get("tls")), True),
+            username=q.get("username"),
+            password=q.get("password"),
+            auth_type=q.get("auth_type", "password"),
+            tls_skip_verify=_bool(q.get("tls_skip_verify"), False),
+            authcfg=q.get("authcfg"),
+        )
+
+        table = q.get("table") or None
+        epsg = q.get("epsg") or None
+        sql = q.get("sql") or None
+        schema = q.get("schema") or None
+        catalog = q.get("catalog") or None
+
+        # Trailing-semicolon workaround: we don't support multi-statement transactions.
+        if sql:
+            sql = sql.rstrip().rstrip(";")
+
+        # Save for wrapper-level reuse
+        self.conn_config = conn_config
+        self._table_name = table
+        self._epsg_code = epsg
+        self._sql = sql
+        self._schema = schema
+        self._catalog = catalog
+
+        PlgLogger.log(
+            message=(
+                f"URI parsed: host={conn_config.display_name()} "
+                f"auth={conn_config.auth_type} catalog={catalog} "
+                f"schema={schema} table={table} "
+                f"epsg={epsg} sql={'<set>' if sql else None}"
+            ),
+            log_level=Qgis.MessageLevel.NoLevel,
+            push=False,
+        )
+
+        return conn_config, table, epsg, sql, schema, catalog
+
+    @staticmethod
+    def build_uri(
+        conn_config: HardchargerConnConfig,
+        table: Optional[str] = None,
+        schema: Optional[str] = None,
+        epsg: Optional[str] = None,
+        sql: Optional[str] = None,
+        catalog: Optional[str] = None,
+    ) -> str:
+        """Build a layer URI from a connection config and layer bits."""
+        params: dict = {
+            "use_tls": "1" if conn_config.use_tls else "0",
+            "tls_skip_verify": "1" if conn_config.tls_skip_verify else "0",
+            "auth_type": conn_config.auth_type,
+        }
+        # Prefer authcfg over raw credentials — never write a plaintext password
+        # into a URI that will be saved inside a QGIS project file.
+        if conn_config.authcfg:
+            params["authcfg"] = conn_config.authcfg
+        else:
+            if conn_config.username:
+                params["username"] = conn_config.username
+            if conn_config.password:
+                params["password"] = conn_config.password
+        if catalog:
+            params["catalog"] = catalog
+        if schema:
+            params["schema"] = schema
+        if table:
+            params["table"] = table
+        if epsg:
+            params["epsg"] = epsg
+        if sql:
+            params["sql"] = sql
+        return (
+            f"{HardchargerTools.URI_SCHEME}://"
+            f"{'[' + conn_config.host + ']' if ':' in conn_config.host else conn_config.host}"
+            f":{conn_config.port}"
+            f"?{urlencode(params)}"
+        )

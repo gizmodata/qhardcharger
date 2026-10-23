@@ -1,10 +1,2 @@
-# Embedded requirements
-#
-# Python packages required by the plugin and which are not included into the embedded Python in QGIS (mainly Windows).
-#
-# Typical command to install:
-# python -m pip install --no-deps -U -r requirements/embedded.txt -t qgizmosql/embedded_external_libs
-# -----------------------
-
-adbc-driver-gizmosql>=2.0.8
-pyarrow>=25
+# Keep runtime dependencies in one place (also used by the first-run installer).
+-r ../qhardcharger/requirements.txt

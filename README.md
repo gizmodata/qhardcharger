@@ -1,229 +1,102 @@
-# qgizmosql — QGIS plugin for GizmoSQL
+# qhardcharger — Hardcharger for QGIS 4
 
-[![Download latest](https://img.shields.io/github/v/release/gizmodata/qgizmosql?label=download%20latest%20ZIP&color=2ea44f)](https://github.com/gizmodata/qgizmosql/releases/latest/download/qgizmosql.zip)
-[![QGIS Plugin Repository](https://img.shields.io/badge/QGIS%20Plugin-experimental-589632?logo=qgis&logoColor=white)](https://plugins.qgis.org/plugins/qgizmosql/)
-[![CI](https://github.com/gizmodata/qgizmosql/actions/workflows/ci.yml/badge.svg)](https://github.com/gizmodata/qgizmosql/actions/workflows/ci.yml)
+[![CI](https://github.com/gizmodata/qhardcharger/actions/workflows/ci.yml/badge.svg)](https://github.com/gizmodata/qhardcharger/actions/workflows/ci.yml)
+[![Download](https://img.shields.io/github/v/release/gizmodata/qhardcharger?label=stable%20ZIP)](https://github.com/gizmodata/qhardcharger/releases/latest/download/qhardcharger.zip)
 [![License: GPL v2+](https://img.shields.io/badge/License-GPLv2%2B-blue.svg)](LICENSE)
 
-Browse and visualize spatial data from a **[GizmoSQL](https://gizmodata.com/gizmosql)** server directly in QGIS — no raw DuckDB file required. Connect to a remote (or local) GizmoSQL Arrow Flight SQL service, pick a table, and add it as a QGIS layer.
+Browse [Hardcharger](https://gizmodata.com/hardcharger) spatial tables and custom SQL directly in **QGIS 4 / Qt 6**. The read-only vector provider streams Arrow record batches through the native Hardcharger ADBC driver over **Warp SQL HTTP(S)**. Your data stays on the server.
 
-> **Status: 🚧 Early development.** This plugin is being forked from [QDuckDB](https://gitlab.com/Oslandia/qgis/qduckdb) (Oslandia, GPLv2+) and is having its DuckDB embedded-file connection layer swapped for the **[`adbc-driver-gizmosql`](https://pypi.org/project/adbc-driver-gizmosql/)** client, which speaks Arrow Flight SQL to a GizmoSQL server. Track progress in [Issues](https://github.com/gizmodata/qgizmosql/issues).
+Version 1.0.0 is a stable release (`experimental=False`). QGIS compatibility is declared as 4.0–4.99. This is a separate plugin from [qgizmosql](https://github.com/gizmodata/qgizmosql); it connects to Hardcharger, using its own provider key and settings.
 
-> **Install in QGIS:** click the green badge above to grab `qgizmosql.zip`, then in QGIS go to **Plugins → Manage and Install Plugins → Install from ZIP** and pick the file.
+## Install
 
-> **New in v0.5.0:** the plugin runs on **`adbc-driver-gizmosql` 2.0**, powered by the new native **Go [GizmoSQL ADBC driver](https://github.com/gizmodata/gizmosql-adbc)** — same API as before, with DDL/DML immediate execution, `RETURNING` support, `gizmosql://` URIs, and OAuth/SSO provided by the shared Go driver library used across all languages.
+1. Download [`qhardcharger.zip`](https://github.com/gizmodata/qhardcharger/releases/latest/download/qhardcharger.zip).
+2. In QGIS 4, open **Plugins → Manage and Install Plugins → Install from ZIP**.
+3. Select the ZIP and install. On activation, accept the dependency download into the plugin's own `embedded_external_libs/` folder.
+4. Restart QGIS after upgrades, so Python reloads the native libraries and plugin code.
 
----
+The slim ZIP uses the same package submitted to the [QGIS plugin repository](https://plugins.qgis.org/plugins/qhardcharger/). Availability in QGIS's searchable catalog depends on repository approval. No experimental-plugin setting is needed for this stable release.
 
-## Why qgizmosql?
+**Offline installation:** releases also include Linux x86-64, macOS Apple silicon, and Windows x86-64 ZIPs with dependencies for **Python 3.12**. Match both your operating system and QGIS's Python version (shown under **Help → About**). Other Python versions should use the slim ZIP, which installs the correct wheels for the running interpreter. Runtime dependencies require Python 3.11 or later.
 
-A user of GizmoSQL asked for this in [gizmosql#160](https://github.com/gizmodata/gizmosql/issues/160):
+Pinned runtime dependencies (NumPy 2.5.4 on Python 3.12+, NumPy 2.4.6 on Python 3.11, and packaging 26.3): `adbc-driver-hardcharger==2.0.2`, `adbc-driver-manager==1.12.0`, `pyarrow==26.0.0`.
 
-> We use GizmoSQL for storing geospatial data. When it comes to visualizing the data on a map, DataGrips' geo viewer does not scale well and lacks GIS tools. QDuckDB exists, but it requires access to the raw DuckDB file. A QGIS plugin that connects to GizmoSQL directly would help GizmoSQL gain foothold in the GIS community.
+## Connect and add a layer
 
-`qgizmosql` is exactly that.
+1. Open **Plugins → Hardcharger → Add Hardcharger layer**.
+2. Enter the **Host** (a hostname, without a URI scheme) and **Port** (default `31337`). TLS/HTTPS is enabled by default. Turn it off only for a local development server without TLS.
+3. For **Password** sign-in, select or create a **Basic authentication** configuration using the credentials selector. QGIS Auth Manager encrypts the password; projects store only the `authcfg` reference.
+4. Alternatively, choose **OAuth / SSO (Enterprise Edition)** for browser sign-in to an appropriately configured server.
+5. Click **Connect & list tables**, select a `catalog.schema.table`, and choose the actual **Geometry CRS** of your data.
+6. Click **Add Layer**. Use **Custom SQL** to load a SELECT query instead of a table.
 
-| | QDuckDB | **qgizmosql** |
-|---|---|---|
-| Data access | Local DuckDB file | Remote (or local) GizmoSQL server |
-| Transport | In-process DuckDB | Arrow Flight SQL (gRPC + TLS) |
-| Auth | n/a (file) | Password **or** OAuth/SSO (browser flow) |
-| Multi-user | ❌ | ✅ |
-| Spatial engine | DuckDB `spatial` ext. | Same — runs server-side on GizmoSQL |
+The provider discovers DuckDB spatial `GEOMETRY` columns (including typed geometry columns). Set the CRS to match the source coordinates; assigning a CRS does not transform the data. Numeric single-column primary keys are used as feature IDs; other layers receive generated IDs. Subset SQL, simple expressions, bounding boxes, feature IDs and attribute selections are handled by the provider.
 
----
+For local self-signed certificates, **Skip TLS cert verification** is available. Leave it disabled for production.
 
-## Quickstart
+## Try a local server
 
-### 1. Prerequisites
-
-- **QGIS ≥ 3.40 LTR** *Bratislava* — works on the current LTR and on the latest stable QGIS
-- A running **GizmoSQL server** — see the 30-second Docker recipe below
-- Network access from your QGIS machine to the GizmoSQL server (default port `31337`)
-
-### 2. Start a GizmoSQL server (skip if you already have one)
-
-The fastest way to get a server running locally:
+Install the server and client in a separate Python environment:
 
 ```bash
-docker run --name gizmosql \
-           --detach \
-           --rm \
-           --tty \
-           --init \
-           --publish 31337:31337 \
-           --env TLS_ENABLED="1" \
-           --env GIZMOSQL_USERNAME="gizmosql_user" \
-           --env GIZMOSQL_PASSWORD="gizmosql_password" \
-           --env PRINT_QUERIES="1" \
-           --pull always \
-           gizmodata/gizmosql:latest
+pip install 'hardcharger[adbc]==2.0.1'
 ```
 
-GizmoSQL loads the DuckDB `spatial` extension automatically — nothing extra to do.
+Run this script and leave it running while connecting from QGIS. Hardcharger loads its spatial extension automatically.
 
-#### Optional: seed a tiny sample spatial table on startup
+```python
+import hardcharger
 
-If you don't already have a spatial table to point QGIS at, use the `INIT_SQL_COMMANDS` env var to have GizmoSQL run a `CREATE TABLE` + `INSERT`s the moment it boots. Stop the previous container first (`docker rm -f gizmosql`) and run:
-
-```bash
-docker run --name gizmosql \
-           --detach \
-           --rm \
-           --tty \
-           --init \
-           --publish 31337:31337 \
-           --env TLS_ENABLED="1" \
-           --env GIZMOSQL_USERNAME="gizmosql_user" \
-           --env GIZMOSQL_PASSWORD="gizmosql_password" \
-           --env PRINT_QUERIES="1" \
-           --env INIT_SQL_COMMANDS="
-             CREATE TABLE IF NOT EXISTS cities (
-               id     INTEGER,
-               name   VARCHAR,
-               geom   GEOMETRY
-             );
-             INSERT INTO cities VALUES
-               (1, 'Charlotte',     ST_Point(-80.8431, 35.2271)),
-               (2, 'San Francisco', ST_Point(-122.4194, 37.7749)),
-               (3, 'New York',      ST_Point(-74.0060, 40.7128)),
-               (4, 'London',        ST_Point(-0.1276,  51.5074)),
-               (5, 'Tokyo',         ST_Point(139.6917, 35.6895));
-           " \
-           --pull always \
-           gizmodata/gizmosql:latest
+with hardcharger.Server(username="hardcharger", password="local-example-only") as server:
+    with server.connect() as conn, conn.cursor() as cur:
+        cur.execute("CREATE TABLE cities (id BIGINT PRIMARY KEY, name VARCHAR, geom GEOMETRY)")
+        cur.execute("INSERT INTO cities VALUES "
+                    "(1, 'Charlotte', ST_Point(-80.8431, 35.2271)), "
+                    "(2, 'London', ST_Point(-0.1276, 51.5074))")
+    print(f"QGIS host: {server.host}, port: {server.port}; disable TLS for this local server")
+    input("Press Enter when finished... ")
 ```
 
-Once QGIS is connected, pick the `cities` table with `geom` as the geometry column to render the five points on the map.
+Add the `cities` table with **EPSG:4326**.
 
-### 3. Install the QGIS plugin
+## PyQGIS scripting
 
-**From the QGIS Plugin Repository** ([qgizmosql on plugins.qgis.org](https://plugins.qgis.org/plugins/qgizmosql/)):
-
-1. In QGIS: **Plugins → Manage and Install Plugins…**
-2. Make sure **Settings → Show also experimental plugins** is checked (qgizmosql is currently flagged experimental).
-3. Search for `qgizmosql` and click **Install**
-
-**From a ZIP (pre-release / development)**:
-
-1. Download the latest `qgizmosql-*.zip` from [Releases](https://github.com/gizmodata/qgizmosql/releases)
-2. In QGIS: **Plugins → Manage and Install Plugins… → Install from ZIP**
-3. Select the ZIP and click **Install Plugin**
-
-On first activation, the plugin checks for `pyarrow` + `adbc-driver-gizmosql` and, if either is missing, pip-installs them into its own `embedded_external_libs/` subdirectory — no manual `pip install` required. Air-gapped users can skip the network step by grabbing a per-platform **offline** ZIP from [Releases](https://github.com/gizmodata/qgizmosql/releases) instead.
-
-#### ⚠️ Upgrading: restart QGIS after a reinstall
-
-Python's import system caches modules in `sys.modules`, and QGIS doesn't fully purge that cache when you uninstall + reinstall a plugin in the same session. **After upgrading qgizmosql, fully quit QGIS and relaunch it** — otherwise QGIS keeps running the old code even though the new files are on disk.
-
-If you're iterating on the plugin during development and want to skip the QGIS-restart cycle, install the **[Plugin Reloader](https://plugins.qgis.org/plugins/plugin_reloader/)** plugin. It purges qgizmosql from `sys.modules` and re-imports the freshly-installed code without restarting QGIS — `Plugins → Plugin Reloader → Reload (Ctrl+F5)`.
-
-### 4. Connect and add a layer
-
-1. **Plugins → qgizmosql → Add GizmoSQL Layer**
-2. Fill in the connection dialog:
-   - **URI:** `grpc+tls://localhost:31337`
-   - **Auth type:** `Password` or `OAuth / SSO`
-   - **Username / Password** (for password auth) — e.g. `gizmosql_user` / `gizmosql_password`
-   - **☑ Skip TLS verification** (only for self-signed local certs)
-3. Click **Connect** — the plugin lists schemas and tables from the server
-4. Pick a table with a geometry column, choose the geometry column, and click **Add Layer**
-
-The table is streamed to QGIS as Arrow record batches and rendered as a vector layer. Feature requests (filters, bbox, attribute selection) are pushed down to GizmoSQL as SQL.
-
----
-
-## PyQGIS usage (scripting)
-
-You can also add layers programmatically from the QGIS Python console. The plugin's URI scheme is `gizmosql://` (the `grpc+tls://` form is only for the dialog's *Host* field — internally the plugin reassembles a `gizmosql://` URI before opening the layer):
+After activating the plugin, run in QGIS's Python console:
 
 ```python
 from qgis.core import QgsProject, QgsProviderRegistry, QgsVectorLayer
 
-metadata = QgsProviderRegistry.instance().providerMetadata("gizmosql")
+metadata = QgsProviderRegistry.instance().providerMetadata("hardcharger")
 uri = metadata.encodeUri({
-    "host": "localhost",
+    "host": "db.example.com",
     "port": "31337",
-    "use_tls": "1",
-    "tls_skip_verify": "1",
-    "auth_type": "password",
-    "username": "gizmosql_user",
-    "password": "gizmosql_password",
+    "authcfg": "abc1234",  # your QGIS Basic authentication config ID
     "schema": "main",
     "table": "cities",
-    # Optional — when omitted, the provider resolves the connection's
-    # current_database() at first query. Set it explicitly to address
-    # a non-default attached catalog.
-    # "catalog": "memory",
-    # Optional — re-project on the QGIS side. Server geometries are
-    # passed through; provider auto-detects the GEOMETRY column.
-    # "epsg": "4326",
+    "epsg": "4326",
 })
-layer = QgsVectorLayer(uri, "cities", "gizmosql")
+layer = QgsVectorLayer(uri, "Cities", "hardcharger")
+if not layer.isValid():
+    raise RuntimeError("Check the Hardcharger entry in QGIS Log Messages")
 QgsProject.instance().addMapLayer(layer)
 ```
 
-`schema` and `table` must each be a single SQL identifier (the strict `[A-Za-z_][A-Za-z0-9_]*` form) — fully-qualified `schema.table` strings are rejected. The geometry column is detected automatically from `information_schema.columns WHERE data_type = 'GEOMETRY'`, so there is no `geom_column=` parameter to set.
-
-For **password auth via QGIS Auth Manager** (the recommended way to avoid embedding credentials in saved project files), drop `username` / `password` and pass `authcfg` instead — e.g. `"authcfg": "abc1234"` where the value is the auth-config ID.
-
-For **OAuth/SSO**, replace `auth_type=password` with `auth_type=external` — a browser window will open for login.
-
-You can also build the URI with the wrapper's `build_uri` helper, which is what the dialog uses internally:
-
-```python
-from qgizmosql.provider.gizmosql_wrapper import GizmoSqlConnConfig, GizmoSqlTools
-
-cfg = GizmoSqlConnConfig(
-    host="localhost", port=31337, use_tls=True, tls_skip_verify=True,
-    username="gizmosql_user", password="gizmosql_password",
-)
-uri = GizmoSqlTools.build_uri(cfg, schema="main", table="cities", catalog="memory")
-layer = QgsVectorLayer(uri, "cities", "gizmosql")
-QgsProject.instance().addMapLayer(layer)
-```
-
----
+Layer URIs use `hardcharger://host:port?use_tls=1&authcfg=...&schema=main&table=cities&epsg=4326`. They also accept `tls=false` for compatibility with driver URIs. Catalog defaults to `current_database()`; pass `catalog` to address another attached catalog. Table, schema and catalog names currently accept ASCII SQL identifiers (`[A-Za-z_][A-Za-z0-9_]*`); use custom SQL with quoted identifiers for other names. For custom SQL, replace `table`/`schema` with `sql: "SELECT id, name, geom FROM main.cities WHERE id > 0"`.
 
 ## Troubleshooting
 
-| Symptom | Fix |
-|---|---|
-| `ModuleNotFoundError: adbc_driver_gizmosql` in QGIS | Restart QGIS after installing the plugin. On macOS/Linux, check the plugin log for the install path. |
-| `TLS handshake failed` | For local self-signed certs, enable **Skip TLS verification**. For production, provide a CA bundle path. |
-| `Connection refused` | Confirm the server is up. With the Docker command above, `docker ps` should show `gizmosql` running on `0.0.0.0:31337`. |
-| No tables listed | Confirm the user has `SELECT` on `information_schema`. Try `SELECT * FROM information_schema.tables` via the [GizmoSQL CLI](https://github.com/gizmodata/gizmosql-public). |
-| Geometry column not detected | qgizmosql looks for columns of type `GEOMETRY` (DuckDB spatial) or WKB `BLOB` columns. Cast with `ST_AsWKB(geom)` if needed. |
+- **Missing dependencies:** accept the first-run download, or install an offline ZIP matching your platform and Python version. Restart QGIS after reinstalling.
+- **Connection refused:** check the server address, port and whether TLS is enabled on both ends.
+- **No geometry:** the source query must return a native `GEOMETRY` column. Convert WKB with `ST_GeomFromWKB` in custom SQL if necessary.
+- **Invalid layer or query:** check **View → Panels → Log Messages → Hardcharger**. Ensure your user can read the selected table.
+- **Saved project on another computer:** create the matching QGIS Auth Manager configuration there before opening the layer.
 
----
+## Development and release
 
-## Development
+See [CONTRIBUTING.md](CONTRIBUTING.md) for tests, packaging and publication. CI runs unit and live-server tests across Python 3.11–3.14, Qt 6 migration checks, and real QGIS 4 provider tests. OAuth requires an identity provider and is not part of the automated sign-in tests.
 
-```bash
-git clone https://github.com/gizmodata/qgizmosql
-cd qgizmosql
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements/development.txt
-pip install --no-deps -U -r requirements/embedded.txt -t qgizmosql/embedded_external_libs
-```
+## Credits and license
 
-Symlink the `qgizmosql/` directory into your QGIS profile's `python/plugins/` folder to test your changes live.
+Derived from **[qgizmosql](https://github.com/gizmodata/qgizmosql)** by GizmoData and **[QDuckDB](https://gitlab.com/Oslandia/qgis/qduckdb)** by Oslandia, originally funded by IFREMER. Original authors and copyright notices are preserved. **GPL-2.0-or-later**; see [LICENSE](LICENSE). The Hardcharger ADBC driver and Apache Arrow dependencies have their own licenses.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for coding conventions (forked from QDuckDB: black, isort, flake8, pre-commit).
-
----
-
-## Credits
-
-- Forked from **[QDuckDB](https://gitlab.com/Oslandia/qgis/qduckdb)** by [Oslandia](https://oslandia.com) — originally funded by [IFREMER](https://www.ifremer.fr/). All original authors and copyright notices are preserved.
-- **GizmoSQL** by [GizmoData](https://gizmodata.com) — an Arrow Flight SQL server built on DuckDB.
-- **[ADBC](https://arrow.apache.org/adbc/)** — Apache Arrow Database Connectivity.
-
-## License
-
-GPLv2+ (inherited from QDuckDB). See [LICENSE](LICENSE).
-
-## Get in touch
-
-- Report bugs / request features: [GitHub Issues](https://github.com/gizmodata/qgizmosql/issues)
-- Email: [philip@gizmodata.com](mailto:philip@gizmodata.com)
+[Issues](https://github.com/gizmodata/qhardcharger/issues) · [GizmoData](https://gizmodata.com) · [Hardcharger documentation](https://docs.hardcharger.gizmodata.com)

@@ -1,165 +1,80 @@
 name: ci
-
 on:
   push:
     branches: [main]
-    tags: ["v*"]
-    # Docs-only pushes don't change anything we lint, test, or package.
-    # Skip the run entirely so CI minutes go to substantive changes.
-    # Tag pushes are matched by `tags:` above and are NOT filtered by
-    # `paths-ignore` — releases always run.
-    paths-ignore:
-      - "**.md"
-      - "CHANGELOG.md"
-      - "README.md"
-      - "CLAUDE.md"
-      - ".gitignore"
-      - "docs/**"
+    tags: ['v*']
   pull_request:
     branches: [main]
-    paths-ignore:
-      - "**.md"
-      - "CHANGELOG.md"
-      - "README.md"
-      - "CLAUDE.md"
-      - ".gitignore"
-      - "docs/**"
   workflow_dispatch:
+permissions:
+  contents: read
 
 jobs:
   lint:
-    # Mirrors the plugins.qgis.org automated review checks so we don't have
-    # to re-tag every time their scanner finds something we could have caught
-    # locally: flake8 (style/quality), bandit (security), and a permission
-    # check that no .py file is marked executable.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
-      - run: pip install flake8 bandit
-      - name: flake8
-        run: flake8 qgizmosql --count --show-source --statistics
-      - name: bandit (security scan)
-        # plugins.qgis.org runs Bandit but only surfaces Medium+ severity
-        # findings (B608 SQL-injection is the canonical example). Match
-        # that filter here so our CI gates on what they actually report.
-        # Inline `# nosec` markers still suppress specific checks.
-        run: |
-          bandit -r qgizmosql \
-            --severity-level medium \
-            --exclude qgizmosql/embedded_external_libs
-      - name: No executable .py files
-        # plugins.qgis.org flags any *.py with the +x bit as suspicious.
-        run: |
-          set -euo pipefail
-          bad=$(find qgizmosql -name "*.py" -perm -u+x || true)
-          if [[ -n "$bad" ]]; then
-            echo "ERROR: these Python files have +x set; chmod -x them:"
-            echo "$bad"
-            exit 1
-          fi
+          python-version: '3.12'
+      - run: pip install flake8==7.4.1 bandit==1.9.4
+      - run: flake8 qhardcharger --count --show-source --statistics
+      - run: bandit -r qhardcharger --severity-level medium --exclude qhardcharger/embedded_external_libs
+      - name: Check Python file permissions
+        run: test -z "$(find qhardcharger -name '*.py' -perm -u+x)"
 
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.11', '3.12', '3.13', '3.14']
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
       - run: python -m unittest discover -s tests/unit -v
+      - run: pip install -r requirements/testing.txt
+      - run: python -m pytest tests/integration -v -m integration
 
-  integration:
-    # Live tests against a real GizmoSQL server. The fixture starts the
-    # server as a managed subprocess via the gizmosql PyPI package; no
-    # Docker service container is needed.
+  qgis4:
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/qgis/pyqgis4-checker:main-ubuntu
+      options: --user 0
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONOPTIMIZE: '0'
+      PYTHONPATH: /tmp/qhardcharger-deps:/usr/share/qgis/python:/usr/lib/python3/dist-packages
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-      - name: Install ADBC driver + pytest + gizmosql
-        # pytest-cov is required because setup.cfg's [tool:pytest] addopts
-        # carries --cov flags; without it pytest aborts with exit 4.
-        # gizmosql + cryptography power the integration-test fixture
-        # (subprocess server + self-signed TLS cert).
-        run: pip install pytest pytest-cov adbc-driver-gizmosql 'gizmosql>=1.35.1,<2' 'cryptography>=49'
-      - name: Run integration tests
-        run: python -m pytest tests/integration -v -m integration
+      - name: Install isolated test dependencies
+        run: python3 -m pip install --target /tmp/qhardcharger-deps -r requirements/testing.txt
+      - name: Verify Qt 6 API compatibility
+        run: |
+          pyqt5_to_pyqt6.py --dry_run --logfile /tmp/qt6.log qhardcharger
+          cat /tmp/qt6.log
+          pyqt5_to_pyqt6.py qhardcharger
+          git diff --exit-code -- qhardcharger
+      - name: Test real QGIS 4 provider and dialog against Hardcharger
+        run: python3 tests/qgis/verify_provider.py
 
   package:
-    # Build the SLIM plugin ZIP — pure Python only, no embedded native deps.
-    # This is the artifact submitted to plugins.qgis.org (25 MB upload cap)
-    # and the one most users install. On first launch the plugin pip-installs
-    # pyarrow + adbc-driver-gizmosql into embedded_external_libs/ for them.
+    needs: [lint, test, qgis4]
     runs-on: ubuntu-latest
-    needs: [lint, test, integration]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
-
-      - name: Resolve plugin version
-        id: meta
-        # On a v* tag push, use the tag (without the leading v) as the plugin
-        # version and rewrite metadata.txt so the installed plugin reports it
-        # correctly in the QGIS plugin manager. Off-tag builds keep whatever
-        # metadata.txt already says (e.g. 0.1.0-DEV) — useful for testing
-        # the packaging itself on PRs without bumping the source-of-truth.
-        run: |
-          set -euo pipefail
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            ver="${GITHUB_REF#refs/tags/v}"
-            echo "Tagged release — syncing metadata.txt to version=${ver}"
-            sed -i.bak -E "s/^version=.*/version=${ver}/" qgizmosql/metadata.txt
-            rm -f qgizmosql/metadata.txt.bak
-          else
-            ver=$(awk -F= '/^version=/{print $2}' qgizmosql/metadata.txt)
-          fi
-          echo "version=${ver}" >> "$GITHUB_OUTPUT"
-          echo "Resolved version: ${ver}"
-
-      - name: Stage LICENSE inside the plugin folder
-        # plugins.qgis.org rejects packages that don't carry a LICENSE file at
-        # <plugin>/LICENSE, so copy the repo-root one in before zipping.
-        run: cp LICENSE qgizmosql/LICENSE
-
-      - name: Build slim plugin ZIP (versioned + unversioned)
-        # Two zips — same bytes, two filenames:
-        #   qgizmosql-X.Y.Z.zip — nice per-release asset
-        #   qgizmosql.zip        — stable "always latest" filename so the
-        #                          github.com/.../releases/latest/download/
-        #                          URL resolves without knowing the version
-        run: |
-          zip -r "qgizmosql-${{ steps.meta.outputs.version }}.zip" qgizmosql \
-            -x "qgizmosql/embedded_external_libs/*" \
-            -x "qgizmosql/__pycache__/*" \
-            -x "qgizmosql/**/__pycache__/*" \
-            -x "qgizmosql/**/*.pyc"
-          cp "qgizmosql-${{ steps.meta.outputs.version }}.zip" "qgizmosql.zip"
-          ls -lh qgizmosql*.zip
-
+          python-version: '3.12'
+      - run: python scripts/package_plugin.py
       - uses: actions/upload-artifact@v7
         with:
-          name: qgizmosql-plugin-zip
-          path: qgizmosql*.zip
+          name: qhardcharger-plugin-zip
+          path: dist/qhardcharger*.zip
           if-no-files-found: error
 
-      - name: Upload metadata.txt with synced version
-        # The offline-package matrix needs the version-synced metadata.txt so
-        # it doesn't have to redo the sed dance per platform.
-        uses: actions/upload-artifact@v7
-        with:
-          name: synced-metadata
-          path: qgizmosql/metadata.txt
-
   package-offline:
-    # Build OFFLINE-INSTALL plugin ZIPs — one per platform, with all native
-    # wheels (pyarrow + adbc-driver-gizmosql) pre-bundled. Used by users on
-    # air-gapped networks who can't run `pip install` from QGIS.
     needs: package
     strategy:
       fail-fast: false
@@ -176,147 +91,58 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
-
-      - name: Sync metadata.txt from package job
-        uses: actions/download-artifact@v8
-        with:
-          name: synced-metadata
-          path: qgizmosql/
-
-      - name: Resolve plugin version
-        id: meta
-        shell: bash
-        run: |
-          ver=$(awk -F= '/^version=/{print $2}' qgizmosql/metadata.txt)
-          echo "version=${ver}" >> "$GITHUB_OUTPUT"
-
-      - name: Stage LICENSE inside the plugin folder
-        shell: bash
-        run: cp LICENSE qgizmosql/LICENSE
-
-      - name: Install pinned runtime deps into embedded_external_libs
-        shell: bash
-        run: |
-          mkdir -p qgizmosql/embedded_external_libs
-          pip install --target qgizmosql/embedded_external_libs \
-            -r qgizmosql/requirements.txt
-
-      - name: Build offline plugin ZIP
-        shell: bash
-        run: |
-          name="qgizmosql-${{ steps.meta.outputs.version }}-offline-${{ matrix.label }}.zip"
-          # Python's stdlib zip honours a single recursive include; use it
-          # so the step works identically on macOS/Linux/Windows runners.
-          python -m zipfile -c "$name" qgizmosql/
-          ls -lh "$name"
-          echo "ZIP_NAME=$name" >> "$GITHUB_ENV"
-
+          python-version: '3.12'
+      - run: pip install --only-binary=:all: --target qhardcharger/embedded_external_libs -r qhardcharger/requirements.txt
+      - run: python scripts/package_plugin.py --offline ${{ matrix.label }}
       - uses: actions/upload-artifact@v7
         with:
-          name: qgizmosql-offline-${{ matrix.label }}
-          path: ${{ env.ZIP_NAME }}
+          name: qhardcharger-offline-${{ matrix.label }}-py312
+          path: dist/*offline*.zip
           if-no-files-found: error
 
   release:
-    # Publishes a GitHub Release with both the slim ZIP (for plugins.qgis.org
-    # submission) and the per-platform offline ZIPs attached, on every v* tag.
-    # Gated on publish-plugin: if plugins.qgis.org refuses the upload (duplicate
-    # version, auth fail, outage) we don't want a public GH Release pointing at
-    # a tag whose store entry is empty. Re-tag/fix-forward instead.
-    needs: [package, package-offline, publish-plugin]
+    needs: [package, package-offline]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v7
-
       - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
-
-      - name: List release assets
-        run: ls -lh dist/
-
-      - name: Extract release notes from CHANGELOG.md
-        id: changelog
+      - name: Extract release notes
         run: |
-          # Strip the leading 'v' from the tag (refs/tags/v1.2.3 -> 1.2.3)
-          # and pull the matching "## [VERSION]" section out of CHANGELOG.md
-          # (stop at the next "## [" heading). Save to release_notes.md;
-          # fall back to auto-generated notes if no matching section.
           VERSION="${GITHUB_REF_NAME#v}"
-          echo "Extracting release notes for version: ${VERSION}"
-          awk -v ver="${VERSION}" '
-            $0 ~ "^## \\[" ver "\\]" { found=1; next }
-            found && /^## \[/ { exit }
-            found { print }
-          ' CHANGELOG.md > release_notes.md
-
-          if [ -s release_notes.md ]; then
-            echo "found=true" >> "$GITHUB_OUTPUT"
-            echo "---- release_notes.md ----"
-            cat release_notes.md
-          else
-            echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "WARNING: no matching CHANGELOG section for ${VERSION}; falling back to auto-generated notes."
-          fi
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
+          awk -v ver="$VERSION" '$0 ~ "^## \\[" ver "\\]" { found=1; next } found && /^## \[/ { exit } found { print }' CHANGELOG.md > release_notes.md
+          test -s release_notes.md
+      - uses: softprops/action-gh-release@v3
         with:
-          files: dist/qgizmosql*.zip
-          name: qgizmosql ${{ github.ref_name }}
-          body_path: ${{ steps.changelog.outputs.found == 'true' && 'release_notes.md' || '' }}
-          generate_release_notes: ${{ steps.changelog.outputs.found != 'true' }}
+          files: dist/qhardcharger*.zip
+          name: qhardcharger ${{ github.ref_name }}
+          body_path: release_notes.md
           fail_on_unmatched_files: true
 
   publish-plugin:
-    # Push the slim ZIP to plugins.qgis.org on every v* tag.
-    # Uses the v2 token API (POST /plugins/api/<pkg>/version/add/) with a
-    # plugin-scoped JWT Bearer token minted at
-    # https://plugins.qgis.org/plugins/qgizmosql/tokens/create/ — no username
-    # needed. The legacy XML-RPC /plugins/RPC2/ endpoint is account-password
-    # only and rejects PATs with 403, which is why we don't use it.
-    # Runs BEFORE the GitHub Release job — see the comment on `release:`.
-    needs: [package]
+    needs: release
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-      - name: Download slim plugin ZIP
-        uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8
         with:
-          name: qgizmosql-plugin-zip
+          name: qhardcharger-plugin-zip
           path: dist
-
-      - name: Upload to plugins.qgis.org (v2 token API)
+      - name: Upload stable package to QGIS repository
         env:
           QGIS_PLUGIN_TOKEN: ${{ secrets.QGIS_PLUGIN_TOKEN }}
         run: |
           set -euo pipefail
-          if [[ -z "${QGIS_PLUGIN_TOKEN:-}" ]]; then
-            echo "ERROR: secrets.QGIS_PLUGIN_TOKEN must be set." >&2
-            exit 1
-          fi
-          ZIP="dist/qgizmosql.zip"
-          ls -lh "$ZIP"
-          # Success = HTTP 201 Created with JSON {"success": true, ...}.
-          # Auth/permission failure = 403. Validation errors return 4xx with
-          # a JSON error body. -o captures body so we can surface it on fail.
-          HTTP_CODE=$(curl -sS -o response.body -w '%{http_code}' \
-            -X POST \
+          test -n "${QGIS_PLUGIN_TOKEN:-}"
+          HTTP_CODE=$(curl -sS -o response.json -w '%{http_code}' \
             -H "Authorization: Bearer ${QGIS_PLUGIN_TOKEN}" \
-            -F "package=@${ZIP}" \
-            "https://plugins.qgis.org/plugins/api/qgizmosql/version/add/")
-          echo "HTTP ${HTTP_CODE}"
-          echo "---- response body ----"
-          cat response.body || true
-          echo
-          echo "-----------------------"
-          if [[ "${HTTP_CODE}" != "201" && "${HTTP_CODE}" != "200" ]]; then
-            echo "ERROR: plugins.qgis.org rejected the upload (HTTP ${HTTP_CODE})." >&2
-            exit 1
-          fi
-          echo "Upload accepted (HTTP ${HTTP_CODE})."
+            -F 'package=@dist/qhardcharger.zip' \
+            'https://plugins.qgis.org/plugins/api/qhardcharger/version/add/')
+          cat response.json
+          test "$HTTP_CODE" = 201 -o "$HTTP_CODE" = 200
+          python -c 'import json; data=json.load(open("response.json")); assert data.get("success") is True, data'

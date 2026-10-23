@@ -1,0 +1,312 @@
+"""Dialog for connecting to a Hardcharger server and adding a spatial layer.
+
+Built programmatically (no .ui file) because the connection fields are
+fundamentally different from the upstream QDuckDB file-picker dialog.
+"""
+
+from typing import Optional
+
+from qgis.core import (
+    Qgis,
+    QgsApplication,
+    QgsCoordinateReferenceSystem,
+    QgsProject,
+    QgsProviderRegistry,
+    QgsVectorLayer,
+)
+from qgis.gui import QgsAuthConfigSelect, QgsProjectionSelectionWidget
+from qgis.PyQt.QtGui import QIcon
+from qgis.PyQt.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPlainTextEdit,
+    QPushButton,
+    QRadioButton,
+    QSpinBox,
+    QVBoxLayout,
+)
+
+from qhardcharger.__about__ import DIR_PLUGIN_ROOT
+from qhardcharger.gui._table_name import split_qualified_table
+from qhardcharger.provider.hardcharger_wrapper import (
+    DEFAULT_HARDCHARGER_PORT,
+    HardchargerConnConfig,
+    HardchargerTools,
+)
+from qhardcharger.toolbelt.log_handler import PlgLogger
+
+
+class LoadHardchargerLayerDialog(QDialog):
+    """Connect to a Hardcharger server and add one of its tables as a QGIS layer."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Add Hardcharger layer")
+        self.setWindowIcon(
+            QIcon(str(DIR_PLUGIN_ROOT.joinpath("resources/images/logo_hardcharger.webp")))
+        )
+        self.resize(560, 560)
+
+        self._wrapper: Optional[HardchargerTools] = None
+        self._build_ui()
+        self._wire_up()
+
+    # -- UI construction -------------------------------------------------------
+
+    def _build_ui(self) -> None:
+        root = QVBoxLayout(self)
+
+        # -- Connection group --------------------------------------------------
+        conn_box = QGroupBox("Connection")
+        conn_form = QFormLayout(conn_box)
+
+        self._host_edit = QLineEdit("localhost")
+        self._port_spin = QSpinBox()
+        self._port_spin.setRange(1, 65535)
+        self._port_spin.setValue(DEFAULT_HARDCHARGER_PORT)
+
+        self._use_tls_cb = QCheckBox("Use TLS (HTTPS)")
+        self._use_tls_cb.setChecked(True)
+        self._tls_skip_cb = QCheckBox("Skip TLS cert verification (self-signed)")
+        self._tls_skip_cb.setChecked(False)
+
+        self._auth_type_combo = QComboBox()
+        self._auth_type_combo.addItem("Password", userData="password")
+        self._auth_type_combo.addItem(
+            "OAuth / SSO (Enterprise Edition)", userData="external"
+        )
+
+        # No dataprovider filter key: the 2nd argument filters the auth-method
+        # GUIs offered by the "+" (create) popup to methods registered for
+        # that *data provider* (e.g. "postgres"). qhardcharger has no registered
+        # provider key, so any non-empty value (the old "basic") matched no
+        # methods and the popup came up blank (issue #3). Empty shows all
+        # auth methods, including Basic authentication.
+        self._authcfg_select = QgsAuthConfigSelect(self)
+        self._authcfg_hint = QLabel(
+            "Pick or create a stored credential. The password will be saved "
+            "encrypted by the QGIS Auth Manager, not in the project file."
+        )
+        self._authcfg_hint.setWordWrap(True)
+        self._authcfg_hint.setStyleSheet("color: #555; font-size: 11px;")
+
+        conn_form.addRow("Host:", self._host_edit)
+        conn_form.addRow("Port:", self._port_spin)
+        conn_form.addRow("", self._use_tls_cb)
+        conn_form.addRow("", self._tls_skip_cb)
+        conn_form.addRow("Auth type:", self._auth_type_combo)
+        conn_form.addRow("Credentials:", self._authcfg_select)
+        conn_form.addRow("", self._authcfg_hint)
+
+        self._connect_btn = QPushButton("Connect && list tables")
+        conn_form.addRow("", self._connect_btn)
+
+        root.addWidget(conn_box)
+
+        # -- Layer group -------------------------------------------------------
+        layer_box = QGroupBox("Layer")
+        layer_v = QVBoxLayout(layer_box)
+
+        # Table vs SQL mode selector
+        mode_row = QHBoxLayout()
+        self._table_radio = QRadioButton("Table")
+        self._table_radio.setChecked(True)
+        self._sql_radio = QRadioButton("Custom SQL")
+        mode_row.addWidget(self._table_radio)
+        mode_row.addWidget(self._sql_radio)
+        mode_row.addStretch(1)
+        layer_v.addLayout(mode_row)
+
+        self._table_combo = QComboBox()
+        self._table_combo.setEnabled(False)
+        layer_v.addWidget(QLabel("Catalog.schema.table:"))
+        layer_v.addWidget(self._table_combo)
+
+        self._sql_edit = QPlainTextEdit()
+        self._sql_edit.setPlaceholderText(
+            "SELECT id, name, geom FROM schema.my_spatial_table WHERE ..."
+        )
+        self._sql_edit.setEnabled(False)
+        layer_v.addWidget(QLabel("SQL:"))
+        layer_v.addWidget(self._sql_edit)
+
+        self._crs_select = QgsProjectionSelectionWidget()
+        self._crs_select.setCrs(QgsCoordinateReferenceSystem.fromEpsgId(4326))
+        layer_v.addWidget(QLabel("Geometry CRS:"))
+        layer_v.addWidget(self._crs_select)
+
+        root.addWidget(layer_box)
+
+        # -- Status + buttons --------------------------------------------------
+        self._status_label = QLabel("")
+        self._status_label.setWordWrap(True)
+        self._status_label.setStyleSheet("color: #a00;")
+        root.addWidget(self._status_label)
+
+        self._buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        self._add_layer_btn = self._buttons.addButton(
+            "Add Layer", QDialogButtonBox.ButtonRole.AcceptRole
+        )
+        self._add_layer_btn.setIcon(QgsApplication.getThemeIcon("mActionAddLayer.svg"))
+        self._add_layer_btn.setEnabled(False)
+        root.addWidget(self._buttons)
+
+    def showEvent(self, event) -> None:  # noqa: N802 (Qt naming)
+        """Refresh the credential list every time the dialog is (re)shown.
+
+        The plugin caches this dialog instance, so auth configs created
+        elsewhere (e.g. Settings > Options > Authentication) while it exists
+        would otherwise not appear until QGIS restarts (issue #3 workaround
+        note). setConfigId() repopulates the selector, keeping the current
+        selection.
+        """
+        self._authcfg_select.setConfigId(self._authcfg_select.configId())
+        super().showEvent(event)
+
+    def _wire_up(self) -> None:
+        self._auth_type_combo.currentIndexChanged.connect(self._on_auth_type_changed)
+        self._connect_btn.clicked.connect(self._on_connect_clicked)
+        self._table_radio.toggled.connect(self._on_mode_changed)
+        self._table_combo.currentTextChanged.connect(self._refresh_add_enabled)
+        self._sql_edit.textChanged.connect(self._refresh_add_enabled)
+        self._add_layer_btn.clicked.connect(self._on_add_layer_clicked)
+        self._buttons.rejected.connect(self.reject)
+
+        # Apply the initial Table-vs-SQL widget enabled state. setChecked()
+        # in the constructor fires before connect(), so the toggled signal
+        # never reaches _on_mode_changed and the table combo would stay
+        # disabled until the user manually toggled the radio.
+        self._on_mode_changed()
+
+    # -- signal handlers -------------------------------------------------------
+
+    def _on_auth_type_changed(self) -> None:
+        is_oauth = self._auth_type_combo.currentData() == "external"
+        self._authcfg_select.setEnabled(not is_oauth)
+        self._authcfg_hint.setText(
+            "OAuth/SSO opens a browser window at connect time — no stored credentials needed."
+            if is_oauth
+            else "Pick or create a stored credential. The password is saved encrypted "
+            "by the QGIS Auth Manager, not in the project file."
+        )
+
+    def _on_mode_changed(self) -> None:
+        table_mode = self._table_radio.isChecked()
+        self._table_combo.setEnabled(table_mode)
+        self._sql_edit.setEnabled(not table_mode)
+        self._refresh_add_enabled()
+
+    def _current_conn_config(self) -> HardchargerConnConfig:
+        auth_type = self._auth_type_combo.currentData() or "password"
+        authcfg = (
+            self._authcfg_select.configId() if auth_type == "password" else None
+        )
+        return HardchargerConnConfig(
+            host=self._host_edit.text().strip(),
+            port=self._port_spin.value(),
+            use_tls=self._use_tls_cb.isChecked(),
+            tls_skip_verify=self._tls_skip_cb.isChecked(),
+            auth_type=auth_type,
+            authcfg=authcfg,
+        )
+
+    def _on_connect_clicked(self) -> None:
+        self._status_label.setText("")
+        conn_config = self._current_conn_config()
+        if not conn_config.host:
+            self._status_label.setText("Host is required.")
+            return
+        if conn_config.auth_type == "password" and not conn_config.authcfg:
+            self._status_label.setText(
+                "Pick a QGIS auth config (or create one) with your "
+                "Hardcharger username and password."
+            )
+            return
+
+        try:
+            self._wrapper = HardchargerTools(conn_config=conn_config)
+            rows = self._wrapper.run_sql("list_tables")
+        except Exception as exc:
+            self._status_label.setText(f"Connection failed: {exc}")
+            PlgLogger.log(
+                message=f"Hardcharger connection failed: {exc}",
+                log_level=Qgis.MessageLevel.Critical,
+                push=True,
+            )
+            return
+
+        self._table_combo.clear()
+        self._table_combo.addItems([r[0] for r in rows])
+        self._status_label.setStyleSheet("color: #060;")
+        self._status_label.setText(
+            f"Connected — found {len(rows)} table(s) on {conn_config.display_name()}."
+        )
+        self._refresh_add_enabled()
+
+    def _refresh_add_enabled(self) -> None:
+        if self._table_radio.isChecked():
+            self._add_layer_btn.setEnabled(bool(self._table_combo.currentText()))
+        else:
+            text = self._sql_edit.toPlainText().strip()
+            self._add_layer_btn.setEnabled("select" in text.lower())
+
+    def _on_add_layer_clicked(self) -> None:
+        conn_config = self._current_conn_config()
+        epsg = (self._crs_select.crs().authid() or "").replace("EPSG:", "") or None
+
+        catalog: Optional[str] = None
+        schema: Optional[str] = None
+        table: Optional[str] = None
+        sql: Optional[str] = None
+        layer_name = ""
+
+        if self._table_radio.isChecked():
+            full = self._table_combo.currentText()
+            if not full:
+                return
+            catalog, schema, table = split_qualified_table(full)
+            layer_name = full
+        else:
+            sql = self._sql_edit.toPlainText().strip()
+            if not sql:
+                return
+            layer_name = "hardcharger_query"
+
+        metadata = QgsProviderRegistry.instance().providerMetadata("hardcharger")
+        uri_parts = {
+            "host": conn_config.host,
+            "port": str(conn_config.port),
+            "use_tls": "1" if conn_config.use_tls else "0",
+            "tls_skip_verify": "1" if conn_config.tls_skip_verify else "0",
+            "auth_type": conn_config.auth_type,
+        }
+        if conn_config.authcfg:
+            uri_parts["authcfg"] = conn_config.authcfg
+        if catalog:
+            uri_parts["catalog"] = catalog
+        if schema:
+            uri_parts["schema"] = schema
+        if table:
+            uri_parts["table"] = table
+        if sql:
+            uri_parts["sql"] = sql
+        if epsg:
+            uri_parts["epsg"] = epsg
+
+        uri = metadata.encodeUri(uri_parts)
+        layer = QgsVectorLayer(uri, layer_name, "hardcharger")
+        if not layer.isValid():
+            self._status_label.setStyleSheet("color: #a00;")
+            self._status_label.setText(
+                "Layer could not be loaded. Check the QGIS Log Messages panel."
+            )
+            return
+        QgsProject.instance().addMapLayer(layer)
+        self.accept()

@@ -1,6 +1,6 @@
 """Unit tests for the dialog's qualified-table-name parser.
 
-The parser lives in qgizmosql.gui._table_name (a deliberately PyQGIS-free
+The parser lives in qhardcharger.gui._table_name (a deliberately PyQGIS-free
 module) so we can exercise it without standing up a QGIS environment.
 """
 from __future__ import annotations
@@ -13,7 +13,7 @@ _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
-from qgizmosql.gui._table_name import split_qualified_table  # noqa: E402
+from qhardcharger.gui._table_name import split_qualified_table  # noqa: E402
 
 
 class TestSplitQualifiedTable(unittest.TestCase):

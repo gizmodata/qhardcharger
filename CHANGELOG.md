@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.0.0] - 2026-10-23
+
+### Added
+- Stable Hardcharger plugin for QGIS 4 / Qt 6, published as `qhardcharger` with `experimental=False`.
+- Native Warp SQL HTTP(S) connections using Hardcharger ADBC 2.0.2, ADBC Driver Manager 1.12.0 and PyArrow 26.0.0.
+- Hardcharger branding, encrypted QGIS Auth Manager credentials, table browsing, custom SQL and Arrow batch streaming.
+- Real QGIS provider/dialog integration checks and platform-specific offline ZIPs labeled with their Python version.
+
+### Fixed
+- Qt 6 imports and removed Qt 5 field mappings.
+- Numeric feature IDs when the primary key is not the first attribute, 64-bit integers, empty spatial extents and iterator rewind.
+- Attribute selection, null date/time values and attribute-only tables.
+- Credential serialization through provider metadata and IPv6 driver/layer URIs.
+
+---
+
+## GizmoSQL predecessor history
+
+The sections below describe qgizmosql releases before this separate Hardcharger plugin.
+
+
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [0.5.7] - 2026-10-15
