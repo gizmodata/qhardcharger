@@ -4,9 +4,11 @@
 [![Download](https://img.shields.io/github/v/release/gizmodata/qhardcharger?label=stable%20ZIP)](https://github.com/gizmodata/qhardcharger/releases/latest/download/qhardcharger.zip)
 [![License: GPL v2+](https://img.shields.io/badge/License-GPLv2%2B-blue.svg)](LICENSE)
 
-Browse [Hardcharger](https://gizmodata.com/hardcharger) spatial tables and custom SQL directly in **QGIS 4 / Qt 6**. The read-only vector provider streams Arrow record batches through the native Hardcharger ADBC driver over **Warp SQL HTTP(S)**. Your data stays on the server.
+Browse [Hardcharger](https://gizmodata.com/hardcharger) spatial tables and custom SQL directly in **QGIS 4.2.3 or later / Qt 6**. The read-only vector provider streams Arrow record batches through the native Hardcharger ADBC driver over **Warp SQL HTTP(S)**. Your data stays on the server.
 
-Version 1.0.0 is a stable release (`experimental=False`). QGIS compatibility is declared as 4.0–4.99. This is a separate plugin from [qgizmosql](https://github.com/gizmodata/qgizmosql); it connects to Hardcharger, using its own provider key and settings.
+Use a QGIS build with NumPy 2 (the current QGIS 4.2.3 macOS build includes it); PyArrow 26 cannot load in older builds that preload NumPy 1. Upgrade QGIS instead of replacing its bundled NumPy.
+
+Version 1.0.0 is a stable release (`experimental=False`). QGIS compatibility is declared as 4.2.3–4.99. This is a separate plugin from [qgizmosql](https://github.com/gizmodata/qgizmosql); it connects to Hardcharger, using its own provider key and settings.
 
 ## Install
 
@@ -42,13 +44,15 @@ Install the server and client in a separate Python environment:
 pip install 'hardcharger[adbc]==2.0.1'
 ```
 
-Run this script and leave it running while connecting from QGIS. Hardcharger loads its spatial extension automatically.
+Run this script and leave it running while connecting from QGIS. Install and load the spatial extension as an administrator before using spatial functions.
 
 ```python
 import hardcharger
 
 with hardcharger.Server(username="hardcharger", password="local-example-only") as server:
     with server.connect() as conn, conn.cursor() as cur:
+        cur.execute("INSTALL spatial")
+        cur.execute("LOAD spatial")
         cur.execute("CREATE TABLE cities (id BIGINT PRIMARY KEY, name VARCHAR, geom GEOMETRY)")
         cur.execute("INSERT INTO cities VALUES "
                     "(1, 'Charlotte', ST_Point(-80.8431, 35.2271)), "

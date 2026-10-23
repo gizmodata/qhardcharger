@@ -54,8 +54,9 @@ jobs:
         run: |
           pyqt5_to_pyqt6.py --dry_run --logfile /tmp/qt6.log qhardcharger
           cat /tmp/qt6.log
+          cp -R qhardcharger /tmp/qhardcharger-original
           pyqt5_to_pyqt6.py qhardcharger
-          git diff --exit-code -- qhardcharger
+          diff -ru /tmp/qhardcharger-original qhardcharger
       - name: Test real QGIS 4 provider and dialog against Hardcharger
         run: python3 tests/qgis/verify_provider.py
 

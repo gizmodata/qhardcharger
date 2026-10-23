@@ -149,7 +149,7 @@ class HardchargerProvider(QgsVectorDataProvider):
         self._provider_options = providerOptions
         self._flags = flags
         self._is_valid = True
-        weakref.finalize(self, self.disconnect_database)
+        weakref.finalize(self, self.wrapper.close)
 
         self.mapping_field_type = mapping_duckdb_qgis_type
 
@@ -257,7 +257,8 @@ class HardchargerProvider(QgsVectorDataProvider):
                 # _column_geom and _from_clause are validated identifiers.
                 row = self._con.sql(
                     f"select st_geometrytype({self._column_geom}) "
-                    f"from {self._from_clause} limit 1"  # nosec B608
+                    f"from {self._from_clause} "
+                    f"where {self._column_geom} is not null limit 1"  # nosec B608
                 ).fetchone()
                 str_geom = row[0] if row else None
                 if str_geom in mapping_duckdb_qgis_geometry:
@@ -288,7 +289,8 @@ class HardchargerProvider(QgsVectorDataProvider):
                     f"min(st_ymin({self._column_geom})), "
                     f"max(st_xmax({self._column_geom})), "
                     f"max(st_ymax({self._column_geom})) "
-                    f"from {self._from_clause}"
+                    f"from {self._from_clause} "
+                    f"{'WHERE ' + self.subsetString() if self.subsetString() else ''}"
                 ).fetchone()
                 self._extent = (
                     QgsRectangle(*extent_bounds)
@@ -497,6 +499,7 @@ class HardchargerProvider(QgsVectorDataProvider):
         else:
             self.filter_where_clause = None
 
+        self._extent = None
         if updateFeatureCount:
             self._feature_count = None
             self.reloadData()

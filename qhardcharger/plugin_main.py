@@ -102,7 +102,8 @@ class QhardchargerBasePlugin:
         Only needs to be called once per QGIS session.
         """
         registry = QgsProviderRegistry.instance()
-        registry.registerProvider(HardchargerProviderMetadata())
+        if registry.providerMetadata("hardcharger") is None:
+            registry.registerProvider(HardchargerProviderMetadata())
 
 
 class QhardchargerPlugin(QhardchargerBasePlugin):
@@ -207,6 +208,14 @@ class QhardchargerPlugin(QhardchargerBasePlugin):
 
     def unload(self):
         """Cleans up when plugin is disabled/uninstalled."""
+        if self._dlg_add_layer is not None:
+            if self._dlg_add_layer._wrapper is not None:
+                self._dlg_add_layer._wrapper.close()
+            self._dlg_add_layer.close()
+        try:
+            QgsProject.instance().layersWillBeRemoved.disconnect(self._on_layers_removal)
+        except TypeError:
+            pass  # dependency setup may have failed before the signal was connected
         # -- Clean up menu
         self.iface.removePluginMenu(__title__, self.action_main)
         self.iface.removePluginMenu(__title__, self.action_help)

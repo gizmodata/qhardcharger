@@ -47,6 +47,8 @@ class TestQgis4Provider(unittest.TestCase):
             username=cls.server.username, password=cls.server.password,
         )
         with cls.server.connect() as conn, conn.cursor() as cur:
+            cur.execute("INSTALL spatial")
+            cur.execute("LOAD spatial")
             cur.execute("CREATE TABLE cities (name VARCHAR, id BIGINT PRIMARY KEY, "
                         "geom GEOMETRY, visited DATE)")
             cur.execute("INSERT INTO cities VALUES "
