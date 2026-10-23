@@ -3,9 +3,10 @@
 ## [1.0.0] - 2026-10-23
 
 ### Added
-- Stable Hardcharger plugin for QGIS 4 / Qt 6, published as `qhardcharger` with `experimental=False`.
+- Stable Hardcharger plugin for QGIS 4.2.3+ / Qt 6, published as `qhardcharger` with `experimental=False`.
 - Native Warp SQL HTTP(S) connections using Hardcharger ADBC 2.0.2, ADBC Driver Manager 1.12.0 and PyArrow 26.0.0.
 - Hardcharger branding, encrypted QGIS Auth Manager credentials, table browsing, custom SQL and Arrow batch streaming.
+- Native ADBC and Arrow C Data Interface support for QGIS’s reduced macOS Arrow build.
 - Real QGIS provider/dialog integration checks and platform-specific offline ZIPs labeled with their Python version.
 
 ### Fixed

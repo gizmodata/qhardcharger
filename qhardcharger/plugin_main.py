@@ -38,6 +38,7 @@ from qhardcharger.toolbelt.log_handler import PlgLogger
 # import-fail on a fresh install before the user is prompted to download them.
 LoadHardchargerLayerDialog = None  # populated lazily
 HardchargerProviderMetadata = None  # populated lazily
+_provider_metadata_instance = None  # keep the Python virtual methods alive
 
 
 def _load_provider_imports() -> bool:
@@ -101,9 +102,11 @@ class QhardchargerBasePlugin:
 
         Only needs to be called once per QGIS session.
         """
+        global _provider_metadata_instance
         registry = QgsProviderRegistry.instance()
         if registry.providerMetadata("hardcharger") is None:
-            registry.registerProvider(HardchargerProviderMetadata())
+            _provider_metadata_instance = HardchargerProviderMetadata()
+            registry.registerProvider(_provider_metadata_instance)
 
 
 class QhardchargerPlugin(QhardchargerBasePlugin):

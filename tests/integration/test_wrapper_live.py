@@ -149,3 +149,11 @@ def test_information_schema_is_qualifiable_by_catalog(hardcharger_conn_config):
     )
 
 
+
+
+@pytest.mark.integration
+def test_arrow_results_outlive_cursor(hardcharger_conn_config):
+    tools = _connected_tools(hardcharger_conn_config)
+    table = tools.run_sql("SELECT 42 AS answer", results_fetcher="fetch_arrow")
+    tools.close()
+    assert table.column("answer").to_pylist() == [42]

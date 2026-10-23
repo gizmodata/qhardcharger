@@ -16,7 +16,8 @@ os.environ.setdefault("QGIS_AUTH_DB_DIR_PATH", AUTH_DIR.name)
 import pyarrow
 import hardcharger
 from qgis.core import (
-    Qgis, QgsApplication, QgsAuthMethodConfig, QgsFeature, QgsFeatureRequest,
+    Qgis, QgsApplication, QgsAuthMethodConfig, QgsCoordinateReferenceSystem,
+    QgsFeature, QgsFeatureRequest,
     QgsProject, QgsProviderRegistry, QgsRectangle, QgsVectorLayer,
 )
 from qgis.PyQt.QtCore import QMetaType
@@ -151,6 +152,15 @@ class TestQgis4Provider(unittest.TestCase):
         self.assertEqual([f["name"] for f in layer.getFeatures(request)],["London"])
         request = QgsFeatureRequest().setFilterExpression('"name" = \'Tokyo\'')
         self.assertEqual([f["name"] for f in layer.getFeatures(request)],["Tokyo"])
+
+    def test_geometry_reprojection(self):
+        layer = self.layer()
+        request = QgsFeatureRequest().setFilterFid(1099511627778)
+        request.setDestinationCrs(QgsCoordinateReferenceSystem.fromEpsgId(3857),
+                                  QgsProject.instance().transformContext())
+        point = next(layer.getFeatures(request)).geometry().asPoint()
+        self.assertAlmostEqual(point.x(), -14204.37, delta=1)
+        self.assertAlmostEqual(point.y(), 6711542.48, delta=1)
 
     def test_iterator_rewind(self):
         layer = self.layer()

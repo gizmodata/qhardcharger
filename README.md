@@ -97,7 +97,7 @@ Layer URIs use `hardcharger://host:port?use_tls=1&authcfg=...&schema=main&table=
 
 ## Development and release
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for tests, packaging and publication. CI runs unit and live-server tests across Python 3.11–3.14, Qt 6 migration checks, and real QGIS 4 provider tests. OAuth requires an identity provider and is not part of the automated sign-in tests.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for tests, packaging and publication. CI runs unit and live-server tests across Python 3.11–3.15, Qt 6 migration checks, and real QGIS 4 provider tests. OAuth requires an identity provider and is not part of the automated sign-in tests.
 
 ## Credits and license
 
