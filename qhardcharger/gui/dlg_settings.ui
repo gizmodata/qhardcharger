@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
-    <class>wdg_qduckdb_settings</class>
-    <widget class="QWidget" name="wdg_qduckdb_settings">
+    <class>wdg_hardcharger_settings</class>
+    <widget class="QWidget" name="wdg_hardcharger_settings">
         <property name="geometry">
             <rect>
                 <x>0</x>
@@ -11,7 +11,7 @@
             </rect>
         </property>
         <property name="windowTitle">
-            <string>QDuckDB - Settings</string>
+            <string>Hardcharger - Settings</string>
         </property>
         <property name="locale">
             <locale language="English" country="UnitedStates"/>
