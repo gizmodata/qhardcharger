@@ -124,27 +124,41 @@ class HardchargerProvider(QgsVectorDataProvider):
             )
             return
 
-        if self._sql and not self._table:
-            if not self.test_sql_query():
-                return
-            self._from_clause = f"({self._sql})"
-        else:
-            # Default to the connection's current catalog when none was
-            # supplied — keeps single-catalog deployments unchanged while
-            # making cross-catalog picks work the moment the URI carries
-            # `catalog=...`. We resolve once, here, so every information_schema
-            # probe below has a real catalog name to bind.
-            if not self._catalog:
-                with self._con.cursor() as cur:
-                    cur.execute("SELECT current_database()")
-                    self._catalog = cur.fetchone()[0]
-                self._catalog = _safe_identifier(self._catalog, "catalog")
-            schema = self._schema or "main"
-            self._from_clause = (
-                f'"{self._catalog}"."{schema}"."{self._table}"'
-            )
+        try:
+            if self._sql and not self._table:
+                if not self.test_sql_query():
+                    self.wrapper.close()
+                    return
+                self._from_clause = f"({self._sql})"
+            else:
+                # Default to the connection's current catalog when none was
+                # supplied — keeps single-catalog deployments unchanged while
+                # making cross-catalog picks work the moment the URI carries
+                # `catalog=...`. We resolve once, here, so every information_schema
+                # probe below has a real catalog name to bind.
+                if not self._catalog:
+                    with self._con.cursor() as cur:
+                        cur.execute("SELECT current_database()")
+                        self._catalog = cur.fetchone()[0]
+                    self._catalog = _safe_identifier(self._catalog, "catalog")
+                schema = self._schema or "main"
+                self._from_clause = (
+                    f'"{self._catalog}"."{schema}"."{self._table}"'
+                )
 
-        self.get_geometry_column()
+            with self._con.cursor() as cur:
+                cur.execute(f"SELECT * FROM {self._from_clause} LIMIT 0")  # nosec B608
+            self.get_geometry_column()
+
+        except Exception as exc:
+            self.wrapper.close()
+            self._con = None
+            PlgLogger.log(
+                message=f"Could not load Hardcharger layer: {exc}",
+                log_level=Qgis.MessageLevel.Critical,
+                push=True,
+            )
+            return
 
         self._provider_options = providerOptions
         self._flags = flags

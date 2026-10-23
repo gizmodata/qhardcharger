@@ -32,11 +32,6 @@ if _embedded in sys.path:
     sys.path.remove(_embedded)
 sys.path.insert(0, _embedded)
 
-import pyarrow  # noqa: F401, E402
-from adbc_driver_hardcharger import dbapi as hardcharger_dbapi  # type: ignore  # noqa: E402
-
-PlgLogger.log(message="adbc-driver-hardcharger loaded.")
-
 # Default Warp SQL port used by Hardcharger.
 DEFAULT_HARDCHARGER_PORT: int = 31337
 
@@ -276,7 +271,9 @@ class HardchargerTools:
             return self.conn
 
         try:
-            raw_conn = hardcharger_dbapi.connect(
+            from qhardcharger.provider.adbc_client import connect
+
+            raw_conn = connect(
                 uri=self.conn_config.server_uri,
                 **self.conn_config.connect_kwargs(),
             )

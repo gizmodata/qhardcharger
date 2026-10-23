@@ -6,7 +6,7 @@
 
 Browse [Hardcharger](https://gizmodata.com/hardcharger) spatial tables and custom SQL directly in **QGIS 4.2.3 or later / Qt 6**. The read-only vector provider streams Arrow record batches through the native Hardcharger ADBC driver over **Warp SQL HTTP(S)**. Your data stays on the server.
 
-Use a QGIS build with NumPy 2 (the current QGIS 4.2.3 macOS build includes it); PyArrow 26 cannot load in older builds that preload NumPy 1. Upgrade QGIS instead of replacing its bundled NumPy.
+Use the current stable QGIS 4.2.3 or later. The native Arrow C interface also works with QGIS’s already loaded Arrow libraries, including its reduced macOS PyArrow build, without importing the optional dataset module or replacing QGIS’s libraries.
 
 Version 1.0.0 is a stable release (`experimental=False`). QGIS compatibility is declared as 4.2.3–4.99. This is a separate plugin from [qgizmosql](https://github.com/gizmodata/qgizmosql); it connects to Hardcharger, using its own provider key and settings.
 
@@ -21,7 +21,7 @@ The slim ZIP uses the same package submitted to the [QGIS plugin repository](htt
 
 **Offline installation:** releases also include Linux x86-64, macOS Apple silicon, and Windows x86-64 ZIPs with dependencies for **Python 3.12**. Match both your operating system and QGIS's Python version (shown under **Help → About**). Other Python versions should use the slim ZIP, which installs the correct wheels for the running interpreter. Runtime dependencies require Python 3.11 or later.
 
-Pinned runtime dependencies (NumPy 2.5.4 on Python 3.12+, NumPy 2.4.6 on Python 3.11, and packaging 26.3): `adbc-driver-hardcharger==2.0.2`, `adbc-driver-manager==1.12.0`, `pyarrow==26.0.0`.
+New installations pin NumPy 2.5.4 on Python 3.12+ (2.4.6 on Python 3.11), packaging 26.3, and: `adbc-driver-hardcharger==2.0.2`, `adbc-driver-manager==1.12.0`, `pyarrow==26.0.0`. QGIS may have already loaded its own compatible Arrow/NumPy versions; the provider uses their stable C interface rather than swapping native modules in a running application.
 
 ## Connect and add a layer
 

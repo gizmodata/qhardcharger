@@ -73,7 +73,10 @@ def install() -> None:
         try:
             import pyarrow
         except ImportError:
-            sys.modules["pyarrow"] = types.ModuleType("pyarrow")
+            arrow = types.ModuleType("pyarrow")
+            arrow.__path__ = []
+            sys.modules["pyarrow"] = arrow
+            sys.modules["pyarrow.dataset"] = types.ModuleType("pyarrow.dataset")
 
     # adbc_driver_hardcharger may or may not be on sys.path. Stub only when
     # the real one is absent so integration tests pick up the real driver.

@@ -29,6 +29,7 @@ if APP is None:
 from qhardcharger.gui.dlg_add_hardcharger_layer import LoadHardchargerLayerDialog
 from qhardcharger.provider.hardcharger_provider_metadata import HardchargerProviderMetadata
 from qhardcharger.provider.hardcharger_wrapper import HardchargerConnConfig, HardchargerTools
+from qhardcharger.provider.adbc_client import connect
 
 
 class TestQgis4Provider(unittest.TestCase):
@@ -37,8 +38,9 @@ class TestQgis4Provider(unittest.TestCase):
         if Qgis.QGIS_VERSION_INT < 40000:
             raise RuntimeError("These tests require QGIS 4")
         registry = QgsProviderRegistry.instance()
+        cls.metadata = HardchargerProviderMetadata()
         if registry.providerMetadata("hardcharger") is None:
-            if not registry.registerProvider(HardchargerProviderMetadata()):
+            if not registry.registerProvider(cls.metadata):
                 raise RuntimeError("Unable to register Hardcharger provider")
         cls.server = hardcharger.Server()
         cls.server.start()
@@ -46,7 +48,8 @@ class TestQgis4Provider(unittest.TestCase):
             host=cls.server.host, port=cls.server.port, use_tls=False,
             username=cls.server.username, password=cls.server.password,
         )
-        with cls.server.connect() as conn, conn.cursor() as cur:
+        with connect(uri=cls.server.uri, username=cls.server.username,
+                     password=cls.server.password) as conn, conn.cursor() as cur:
             cur.execute("INSTALL spatial")
             cur.execute("LOAD spatial")
             cur.execute("CREATE TABLE cities (name VARCHAR, id BIGINT PRIMARY KEY, "
@@ -101,6 +104,13 @@ class TestQgis4Provider(unittest.TestCase):
         self.assertEqual(layer.featureCount(),2)
         self.assertEqual({f["name"] for f in layer.getFeatures()},{"Charlotte","London"})
         self.assertEqual(layer.fields().names(),["id","name"])
+
+    def test_invalid_sources_are_rejected(self):
+        for options in ({"table": "missing_table"}, {"sql": "SELECT missing FROM cities"}):
+            with self.subTest(options=options):
+                uri = HardchargerTools.build_uri(self.config, schema="main", **options)
+                layer = QgsVectorLayer(uri, "Invalid", "hardcharger")
+                self.assertFalse(layer.isValid())
 
     def test_empty_layer_extent(self):
         layer = self.layer(table="empty_cities")

@@ -12,4 +12,4 @@ Stable Hardcharger vector provider for QGIS 4 / Qt 6, derived from qgizmosql and
 - Keep metadata version and both changelogs current. CI requires the release tag to match metadata.
 - Platform offline ZIPs target Python 3.12 explicitly. The slim ZIP downloads the wheels matching the running interpreter.
 
-PyArrow 26 needs NumPy 2. Stock macOS QGIS 4.0.1 preloads NumPy 1.26 and is unsupported; current QGIS 4.2.3 includes NumPy 2.5.2. Never unload/replace an already imported NumPy to force an ABI upgrade.
+The macOS QGIS 4.2.3 build preloads NumPy 2.5.2 and reduced PyArrow 25.0.1 without dataset support. Use `provider/adbc_client.py` (ADBC C handles + Arrow C Data Interface), not the DB-API wrapper which unconditionally imports dataset. Never unload/replace already imported Arrow/NumPy modules. Fresh environments use the latest stable pins in requirements.txt.

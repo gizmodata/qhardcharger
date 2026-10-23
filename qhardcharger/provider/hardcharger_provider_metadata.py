@@ -8,7 +8,7 @@ there is a single source of truth for URI encoding/decoding.
 from typing import Dict
 from urllib.parse import parse_qsl, urlencode, urlparse
 
-from qgis.core import QgsProviderMetadata, QgsReadWriteContext
+from qgis.core import Qgis, QgsDataProvider, QgsProviderMetadata, QgsReadWriteContext
 
 from qhardcharger.provider.hardcharger_provider import HardchargerProvider
 
@@ -18,8 +18,13 @@ class HardchargerProviderMetadata(QgsProviderMetadata):
         super().__init__(
             HardchargerProvider.providerKey(),
             HardchargerProvider.description(),
-            HardchargerProvider.createProvider,
         )
+
+    def createProvider(self, uri, options, flags=QgsDataProvider.ReadFlags()):
+        return HardchargerProvider(uri, options, flags)
+
+    def supportedLayerTypes(self):
+        return [Qgis.LayerType.Vector]
 
     def decodeUri(self, uri: str) -> Dict[str, str]:
         """Break the qhardcharger URI into a dict of string components."""

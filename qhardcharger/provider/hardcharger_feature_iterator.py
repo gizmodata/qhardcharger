@@ -301,7 +301,7 @@ class HardchargerFeatureIterator(QgsAbstractFeatureIterator):
                     f.setAttribute(attr_idx, attribute)
             else:
                 for idx in range(self.index_geom_column):
-                    converted = self._attributes_converters[attr_idx](cols[idx][row])
+                    converted = self._attributes_converters[idx](cols[idx][row])
                     f.setAttribute(idx, converted)
         else:
             if self._request_sub_attributes:

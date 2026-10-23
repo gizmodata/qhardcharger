@@ -70,9 +70,7 @@ def _find_python_interpreter() -> str:
 
 def _deps_importable(log_failure: bool = False) -> bool:
     # Probe every entry in requirements.txt, not just the headline packages.
-    # adbc_driver_hardcharger imports the importlib_resources backport at
-    # connect time; if a partial system install has adbc + pyarrow but is
-    # missing the backport, we'd silently skip the prompt and fail later.
+    # Check native and transitive dependencies before importing the driver.
     embedded = str(EMBEDDED_LIBS_DIR)
     if embedded in sys.path:
         sys.path.remove(embedded)
@@ -101,7 +99,6 @@ def _deps_importable(log_failure: bool = False) -> bool:
         import numpy  # noqa: F401
         import pyarrow  # noqa: F401
         import adbc_driver_hardcharger  # noqa: F401
-        from adbc_driver_hardcharger import dbapi  # noqa: F401
         import adbc_driver_manager  # noqa: F401
     except Exception as exc:  # noqa: BLE001  — dlopen errors aren't ImportError
         if log_failure:
