@@ -1,8 +1,29 @@
-# qhardcharger — Hardcharger for QGIS 4
+<p align="center">
+  <a href="https://github.com/gizmodata/hardcharger">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gizmodata/qhardcharger/main/docs/assets/hardcharger-banner-dark.png">
+      <img src="https://raw.githubusercontent.com/gizmodata/qhardcharger/main/docs/assets/hardcharger-banner-light.png" alt="Hardcharger™" width="400">
+    </picture>
+  </a>
+</p>
 
-[![CI](https://github.com/gizmodata/qhardcharger/actions/workflows/ci.yml/badge.svg)](https://github.com/gizmodata/qhardcharger/actions/workflows/ci.yml)
-[![Download](https://img.shields.io/github/v/release/gizmodata/qhardcharger?label=stable%20ZIP)](https://github.com/gizmodata/qhardcharger/releases/latest/download/qhardcharger.zip)
-[![License: GPL v2+](https://img.shields.io/badge/License-GPLv2%2B-blue.svg)](LICENSE)
+<p align="center">
+  <a href="https://github.com/gizmodata/qhardcharger/actions/workflows/ci.yml"><img src="https://github.com/gizmodata/qhardcharger/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/gizmodata/qhardcharger/releases/latest/download/qhardcharger.zip"><img src="https://img.shields.io/github/v/release/gizmodata/qhardcharger?label=stable%20ZIP&amp;color=2563eb" alt="Download stable plugin ZIP"></a>
+  <a href="https://plugins.qgis.org/plugins/qhardcharger/"><img src="https://img.shields.io/badge/QGIS-Plugin%20Repository-589632.svg?logo=qgis&amp;logoColor=white" alt="QGIS Plugin Repository"></a>
+  <a href="https://qgis.org/download/"><img src="https://img.shields.io/badge/QGIS-4.2.3%2B-589632.svg?logo=qgis&amp;logoColor=white" alt="QGIS 4.2.3 or later"></a>
+  <a href="https://github.com/gizmodata/qhardcharger#connect-and-add-a-layer"><img src="https://img.shields.io/badge/docs-Hardcharger-2563eb.svg" alt="Hardcharger QGIS guide"></a>
+  <a href="https://github.com/gizmodata/hardcharger-adbc"><img src="https://img.shields.io/badge/ADBC-1.12-f15a24.svg" alt="ADBC 1.12"></a>
+  <a href="https://github.com/gizmodata/warp-sql"><img src="https://img.shields.io/badge/protocol-Warp%20SQL-31a8db.svg" alt="Warp SQL protocol"></a>
+  <img src="https://img.shields.io/badge/plugin-Python-3776AB.svg?logo=python&amp;logoColor=white" alt="Python plugin">
+  <a href="https://github.com/gizmodata/hardcharger"><img src="https://img.shields.io/badge/server-Hardcharger-f15a24.svg" alt="Hardcharger"></a>
+  <a href="https://github.com/gizmodata/qhardcharger/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-GPL%202.0%2B-brightgreen.svg" alt="GPL 2.0 or later license"></a>
+  <a href="https://gizmodata.com"><img src="https://img.shields.io/badge/by-GizmoData%E2%84%A2-f15a24.svg" alt="GizmoData™"></a>
+</p>
+
+<h3 align="center">qhardcharger — visualize Hardcharger spatial data in QGIS 4.</h3>
+
+---
 
 Browse [Hardcharger](https://gizmodata.com/hardcharger) spatial tables and custom SQL directly in **QGIS 4.2.3 or later / Qt 6**. The read-only vector provider streams Arrow record batches through the native Hardcharger ADBC driver over **Warp SQL HTTP(S)**. Your data stays on the server.
 
