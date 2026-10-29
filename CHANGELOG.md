@@ -2,8 +2,11 @@
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-29
+
 ### Changed
 - The plugin now uses the Chargewire protocol through the Hardcharger ADBC driver, and its listing, documentation and layer details name it. It still works with Hardcharger servers released before the rename, and connection settings are unchanged.
+- Require `adbc-driver-hardcharger` == 2.1.0 (bundled), the driver release that uses the Chargewire option names; tested against Hardcharger 2.3.0.
 
 ## [1.0.0] - 2026-10-23
 

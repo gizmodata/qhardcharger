@@ -66,11 +66,12 @@ def _generate_self_signed_tls_cert(out_dir: Path) -> tuple[Path, Path]:
 
 @pytest.fixture(scope="session")
 def hardcharger_server(tmp_path_factory) -> Iterator:
-    """Start a Hardcharger server as a managed subprocess for the session."""
-    hardcharger = pytest.importorskip(
-        "hardcharger",
-        reason="install `pip install hardcharger` to run integration tests",
-    )
+    """Start a Hardcharger server as a managed subprocess for the session.
+
+    A missing ``hardcharger`` package fails the suite (``requirements/testing.txt``
+    installs it): these tests gate releases, so they never skip.
+    """
+    import hardcharger  # noqa: PLC0415
 
     tls_dir = tmp_path_factory.mktemp("tls")
     tls_dir.chmod(0o700)

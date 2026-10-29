@@ -29,7 +29,7 @@ Browse [Hardcharger](https://gizmodata.com/hardcharger) spatial tables and custo
 
 Use the current stable QGIS 4.2.3 or later. The native Arrow C interface also works with QGIS’s already loaded Arrow libraries, including its reduced macOS PyArrow build, without importing the optional dataset module or replacing QGIS’s libraries.
 
-Version 1.0.0 is a stable release (`experimental=False`). QGIS compatibility is declared as 4.2.3–4.99. This is a separate plugin from [qgizmosql](https://github.com/gizmodata/qgizmosql); it connects to Hardcharger, using its own provider key and settings.
+Version 1.1.0 is a stable release (`experimental=False`). QGIS compatibility is declared as 4.2.3–4.99. This is a separate plugin from [qgizmosql](https://github.com/gizmodata/qgizmosql); it connects to Hardcharger, using its own provider key and settings.
 
 ## Install
 
@@ -42,7 +42,7 @@ The slim ZIP uses the same package submitted to the [QGIS plugin repository](htt
 
 **Offline installation:** releases also include Linux x86-64, macOS Apple silicon, and Windows x86-64 ZIPs with dependencies for **Python 3.12**. Match both your operating system and QGIS's Python version (shown under **Help → About**). Other Python versions should use the slim ZIP, which installs the correct wheels for the running interpreter. Runtime dependencies require Python 3.11 or later.
 
-New installations pin NumPy 2.5.4 on Python 3.12+ (2.4.6 on Python 3.11), packaging 26.3, and: `adbc-driver-hardcharger==2.0.2`, `adbc-driver-manager==1.12.0`, `pyarrow==26.0.0`. QGIS may have already loaded its own compatible Arrow/NumPy versions; the provider uses their stable C interface rather than swapping native modules in a running application.
+New installations pin NumPy 2.5.4 on Python 3.12+ (2.4.6 on Python 3.11), packaging 26.3, and: `adbc-driver-hardcharger==2.1.0`, `adbc-driver-manager==1.12.0`, `pyarrow==26.0.0`. QGIS may have already loaded its own compatible Arrow/NumPy versions; the provider uses their stable C interface rather than swapping native modules in a running application.
 
 ## Connect and add a layer
 
@@ -62,7 +62,7 @@ For local self-signed certificates, **Skip TLS cert verification** is available.
 Install the server and client in a separate Python environment:
 
 ```bash
-pip install 'hardcharger[adbc]==2.0.1'
+pip install 'hardcharger[adbc]==2.3.0'
 ```
 
 Run this script and leave it running while connecting from QGIS. Install and load the spatial extension as an administrator before using spatial functions.

@@ -18,6 +18,7 @@ deprecated=False
 experimental=False
 qgisMinimumVersion=4.2.3
 qgisMaximumVersion=4.99
-version=1.0.0
+version=1.1.0
 changelog=
+    1.1.0 - Chargewire protocol naming throughout; Hardcharger ADBC 2.1.0. Still works with Hardcharger servers released before the rename.
     1.0.0 - Stable Hardcharger plugin for QGIS 4 / Qt 6. Native Chargewire HTTP(S), ADBC 2.0.2, PyArrow 26, spatial tables, custom SQL, encrypted credentials, and Arrow streaming.
