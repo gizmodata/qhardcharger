@@ -220,7 +220,7 @@ class HardchargerFeatureIterator(QgsAbstractFeatureIterator):
 
         # Stream the result as Arrow record batches instead of pulling row
         # tuples one at a time. ADBC has already received the data as Arrow
-        # over Warp SQL; converting batch-at-a-time to Python lists is markedly
+        # over Chargewire; converting batch-at-a-time to Python lists is markedly
         # cheaper than per-row dbapi.fetchone() bookkeeping. See issue #2 for
         # the related max-message-size fix.
         # _provider.con() already returns a cursor (see HardchargerProvider.con).

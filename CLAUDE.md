@@ -3,7 +3,7 @@
 Stable Hardcharger vector provider for QGIS 4 / Qt 6, derived from qgizmosql and Oslandia QDuckDB. GPL-2.0-or-later.
 
 - Package/repository: `qhardcharger`; display name: `Hardcharger`; provider: `hardcharger`.
-- Warp SQL HTTP(S) via `adbc-driver-hardcharger`; never send Flight SQL options or gRPC URIs.
+- Chargewire HTTP(S) via `adbc-driver-hardcharger`; never send Flight SQL options or gRPC URIs.
 - Runtime pins live only in `qhardcharger/requirements.txt`; other requirements include that file.
 - Credentials go through QGIS Auth Manager. When `authcfg` is supplied, never serialize raw credentials or fall back to unrelated credentials.
 - QGIS 4 only: `qgisMinimumVersion=4.2.3`, `qgisMaximumVersion=4.99`, `experimental=False`.

@@ -1,6 +1,6 @@
 """Integration tests that exercise the wrapper against a real Hardcharger server.
 
-These tests connect over Warp SQL via ``adbc-driver-hardcharger`` —
+These tests connect over Chargewire via ``adbc-driver-hardcharger`` —
 they only run when the server fixture in ``conftest.py`` is satisfiable
 (Docker SDK installed locally, or ``HARDCHARGER_TEST_HOST`` set in CI).
 
@@ -18,7 +18,7 @@ import os
 import pytest
 
 # Skip the whole module if the native ADBC driver isn't installed —
-# integration tests need it to actually open a Warp SQL connection.
+# integration tests need it to actually open a Chargewire connection.
 pytest.importorskip(
     "adbc_driver_hardcharger",
     reason="install `pip install adbc-driver-hardcharger` to run integration tests",

@@ -56,7 +56,7 @@ def _safe_identifier(name: Optional[str], kind: str) -> Optional[str]:
 class HardchargerProvider(QgsVectorDataProvider):
     """QGIS vector data provider backed by a Hardcharger server.
 
-    The wire protocol is Warp SQL, accessed through the
+    The wire protocol is Chargewire, accessed through the
     ``adbc-driver-hardcharger`` Python client. Server executes DuckDB SQL —
     including the ``spatial`` extension — so spatial-type introspection
     still uses ``information_schema`` and ``ST_*`` functions.
@@ -185,7 +185,7 @@ class HardchargerProvider(QgsVectorDataProvider):
         return self.providerKey()
 
     def storageType(self) -> str:
-        return "Hardcharger Warp SQL server"
+        return "Hardcharger server (Chargewire)"
 
     def isValid(self) -> bool:
         return self._is_valid

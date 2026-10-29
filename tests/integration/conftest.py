@@ -27,7 +27,7 @@ HARDCHARGER_PASSWORD = "hardcharger_password"
 
 def _generate_self_signed_tls_cert(out_dir: Path) -> tuple[Path, Path]:
     """Mint a self-signed RSA cert + key for ``localhost`` so the
-    Hardcharger test server's Warp SQL endpoint is reachable over
+    Hardcharger test server's Chargewire endpoint is reachable over
     ``hardcharger://`` with HTTPS."""
     from cryptography import x509  # noqa: PLC0415
     from cryptography.hazmat.primitives import hashes, serialization  # noqa: PLC0415

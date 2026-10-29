@@ -14,7 +14,7 @@
   <a href="https://qgis.org/download/"><img src="https://img.shields.io/badge/QGIS-4.2.3%2B-589632.svg?logo=qgis&amp;logoColor=white" alt="QGIS 4.2.3 or later"></a>
   <a href="https://github.com/gizmodata/qhardcharger#connect-and-add-a-layer"><img src="https://img.shields.io/badge/docs-Hardcharger-2563eb.svg" alt="Hardcharger QGIS guide"></a>
   <a href="https://github.com/gizmodata/hardcharger-adbc"><img src="https://img.shields.io/badge/ADBC-1.12-f15a24.svg" alt="ADBC 1.12"></a>
-  <a href="https://github.com/gizmodata/warp-sql"><img src="https://img.shields.io/badge/protocol-Warp%20SQL-31a8db.svg" alt="Warp SQL protocol"></a>
+  <a href="https://github.com/gizmodata/chargewire"><img src="https://img.shields.io/badge/protocol-Chargewire-31a8db.svg" alt="Chargewire protocol"></a>
   <img src="https://img.shields.io/badge/plugin-Python-3776AB.svg?logo=python&amp;logoColor=white" alt="Python plugin">
   <a href="https://github.com/gizmodata/hardcharger"><img src="https://img.shields.io/badge/server-Hardcharger-f15a24.svg" alt="Hardcharger"></a>
   <a href="https://github.com/gizmodata/qhardcharger/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-GPL%202.0%2B-brightgreen.svg" alt="GPL 2.0 or later license"></a>
@@ -25,7 +25,7 @@
 
 ---
 
-Browse [Hardcharger](https://gizmodata.com/hardcharger) spatial tables and custom SQL directly in **QGIS 4.2.3 or later / Qt 6**. The read-only vector provider streams Arrow record batches through the native Hardcharger ADBC driver over **Warp SQL HTTP(S)**. Your data stays on the server.
+Browse [Hardcharger](https://gizmodata.com/hardcharger) spatial tables and custom SQL directly in **QGIS 4.2.3 or later / Qt 6**. The read-only vector provider streams Arrow record batches through the native Hardcharger ADBC driver over **Chargewire HTTP(S)**. Your data stays on the server.
 
 Use the current stable QGIS 4.2.3 or later. The native Arrow C interface also works with QGIS’s already loaded Arrow libraries, including its reduced macOS PyArrow build, without importing the optional dataset module or replacing QGIS’s libraries.
 

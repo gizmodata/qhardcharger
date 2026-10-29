@@ -1,5 +1,5 @@
 """Hardcharger client wrapper. Holds every logic related to talking to a Hardcharger
-(Warp SQL) server via the ADBC driver.
+(Chargewire) server via the ADBC driver.
 
 References:
 
@@ -32,7 +32,7 @@ if _embedded in sys.path:
     sys.path.remove(_embedded)
 sys.path.insert(0, _embedded)
 
-# Default Warp SQL port used by Hardcharger.
+# Default Chargewire port used by Hardcharger.
 DEFAULT_HARDCHARGER_PORT: int = 31337
 
 

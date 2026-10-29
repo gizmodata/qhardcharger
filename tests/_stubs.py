@@ -5,7 +5,7 @@ QGIS / ADBC installed (CI lint job, basic dev box, etc.).
 Both unit and integration tests call ``install()`` before importing
 ``qhardcharger.provider.hardcharger_wrapper``. Integration tests then *replace*
 the stubbed ``adbc_driver_hardcharger`` with the real package on sys.path,
-because they need to actually open a Warp SQL connection.
+because they need to actually open a Chargewire connection.
 """
 
 from __future__ import annotations
