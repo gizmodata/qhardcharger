@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-11-05
+
+### Fixed
+- Require `adbc-driver-hardcharger` == 2.4.0 (bundled), was 2.3.0. After the driver lost a session (a server restart or an idle eviction), 2.3.0 could run the next statement again on its own in a new session: inside an SQL transaction (Hardcharger servers through 2.7.0 can answer `BEGIN` before their session document shows the transaction), or without the old session's `USE` and `SET`. 2.4.0 refuses to run it again in both cases. It also connects to port 443 when a `hardcharger://` URI names a GizmoData Cloud host (`*.gizmodata.com`) without a port. Tested against Hardcharger 2.7.0.
+
 ## [1.1.1] - 2026-11-05
 
 ### Changed
