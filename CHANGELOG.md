@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-05
+
+### Changed
+- Require `adbc-driver-hardcharger` == 2.3.0 (bundled), was 2.1.0. With 2.3.0, a session that the driver opens to replace a lost one (for example after the server evicted an idle session or its token expired) keeps the connection's `adbc.hardcharger.setting.*` settings and session/query tags; earlier drivers dropped them. Tested against Hardcharger 2.7.0 (test dependency `hardcharger==2.7.0`, was 2.3.0).
+
 ## [1.1.0] - 2026-10-29
 
 ### Changed
