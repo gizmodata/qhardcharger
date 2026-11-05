@@ -8,6 +8,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   lint:
@@ -35,7 +38,11 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -m unittest discover -s tests/unit -v
       - run: pip install -r requirements/testing.txt
+      # The fixture downloads the Hardcharger server from GitHub: with the workflow's token, not
+      # anonymously, whose shared rate limit failed a release run with HTTP 403.
       - run: python -m pytest tests/integration -v -m integration
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   qgis4:
     runs-on: ubuntu-latest
@@ -58,6 +65,8 @@ jobs:
           pyqt5_to_pyqt6.py qhardcharger
           diff -ru /tmp/qhardcharger-original qhardcharger
       - name: Test real QGIS 4 provider and dialog against Hardcharger
+        env:
+          GH_TOKEN: ${{ github.token }}  # the server download, as in the test job
         run: python3 tests/qgis/verify_provider.py
 
   package:
