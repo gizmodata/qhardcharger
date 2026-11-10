@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-11-09
+
+### Changed
+- Require `adbc-driver-hardcharger` == 2.4.8 (bundled), was 2.4.0, with `adbc-driver-manager` == 1.13.0 (was 1.12.0) and `pyarrow` == 26.0.1 (was 26.0.0), the driver's new minimums. 2.4.8's library exports only its ADBC entry points (earlier drivers also exposed ~70-250 internal symbols to every library QGIS loads), its macOS wheel is tagged for the macOS 13 its Go runtime needs (2.4.0's said macOS 11), and it reports the ADBC statuses the ADBC conformance suite expects (for example `NOT_FOUND` for a missing catalog or schema). Tested against Hardcharger 2.7.0.
+
 ## [1.1.2] - 2026-11-05
 
 ### Fixed

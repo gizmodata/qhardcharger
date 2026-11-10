@@ -18,8 +18,9 @@ deprecated=False
 experimental=False
 qgisMinimumVersion=4.2.3
 qgisMaximumVersion=4.99
-version=1.1.2
+version=1.1.3
 changelog=
+    1.1.3 - Hardcharger ADBC 2.4.8 (with ADBC Driver Manager 1.13.0 and PyArrow 26.0.1): the driver library exports only its ADBC entry points, its macOS wheel states the macOS 13 it needs, and errors use the ADBC statuses the conformance suite expects. Tested against Hardcharger 2.7.0.
     1.1.2 - Hardcharger ADBC 2.4.0: after a lost session, a statement is never run again inside a lost SQL transaction or without the session's USE and settings; GizmoData Cloud hosts default to port 443. Tested against Hardcharger 2.7.0.
     1.1.1 - Hardcharger ADBC 2.3.0: a session that replaces a lost one keeps the connection's settings and tags. Tested against Hardcharger 2.7.0.
     1.1.0 - Chargewire protocol naming throughout; Hardcharger ADBC 2.1.0. Still works with Hardcharger servers released before the rename.
